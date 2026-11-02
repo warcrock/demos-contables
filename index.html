@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Herramientas para estudios contables</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;800&family=Public+Sans:wght@400;600&family=Kalam:wght@400&display=swap">
+<style>
+/* Portada del sitio de Netlify: lleva a las dos demos. Misma familia visual que ellas. */
+:root {
+  --desk: #e4e9e7; --paper: #ffffff; --ink: #1c2320; --muted: #5a6560; --line: #cfd8d3; --pen: #2346a8;
+  --display: "Schibsted Grotesk", "Segoe UI", system-ui, sans-serif;
+  --body: "Public Sans", "Segoe UI", system-ui, sans-serif;
+  --hand: "Kalam", "Segoe Print", cursive;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --desk: #0f1312; --paper: #181e1c; --ink: #e5ebe8; --muted: #9ca8a2; --line: #2c3632; --pen: #93abff; color-scheme: dark; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--desk); color: var(--ink); font: 400 1rem/1.6 var(--body); }
+main { max-width: 860px; margin: 0 auto; padding: 56px 16px 64px; display: grid; gap: 32px; }
+h1 { font: 800 clamp(1.8rem, 5vw, 2.6rem)/1.1 var(--display); margin: 0; text-wrap: balance; }
+.lead { color: var(--muted); max-width: 60ch; margin: 12px 0 0; }
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+a.card { display: grid; gap: 8px; align-content: start; background: var(--paper); border: 1px solid var(--line); border-radius: 10px; padding: 24px; color: inherit; text-decoration: none; }
+a.card:hover { border-color: var(--pen); }
+.card h2 { font: 600 1.3rem/1.2 var(--display); margin: 0; }
+.card p { margin: 0; color: var(--muted); }
+.card .go { color: var(--pen); font-weight: 600; margin-top: 8px; }
+.note { font: 400 1.05rem/1.4 var(--hand); color: var(--muted); margin: 0; }
+footer { color: var(--muted); font-size: 0.9rem; border-top: 1px solid var(--line); padding-top: 16px; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Lo que viene después de bajar Mis Comprobantes</h1>
+    <p class="lead">Dos herramientas para el cierre del mes. Se prueban con datos de ejemplo o con los archivos de un cliente: todo se procesa en tu navegador y los archivos no se suben a ningún lado.</p>
+  </header>
+  <div class="cards">
+    <a class="card" href="conciliacion.html">
+      <h2>Conciliación del banco</h2>
+      <p>Cruza el extracto con Mis Comprobantes Emitidos y Recibidos. Tilda lo que coincide y separa retenciones, pagos de varias facturas juntas, lo que falta cobrar y los gastos del banco. Al final arma el asiento y las preguntas para el cliente.</p>
+      <span class="go">Abrir la demo →</span>
+    </a>
+    <a class="card" href="recategorizacion.html">
+      <h2>Recategorización de monotributo</h2>
+      <p>Con los Emitidos de cada monotributista, dice quién sube de categoría, quién queda afuera del régimen, quién está cerca del tope y quién puede bajar. Con la cuota nueva y el mensaje listo para mandar.</p>
+      <span class="go">Abrir la demo →</span>
+    </a>
+  </div>
+  <p class="note">Usa los topes de ARCA vigentes desde agosto de 2026.</p>
+  <footer>Tomás García · garciatomasdev@gmail.com</footer>
+</main>
+</body>
+</html>

@@ -1,0 +1,1195 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Conciliación automática</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;800&family=Public+Sans:wght@400;500;600;700&family=Kalam:wght@400;700&display=swap">
+<style>
+/* Layout: a short pitch, then the month as a printed bank statement on continuous-form paper (green bands, tractor holes) that ticks itself in pen; then "try it with your files", how it works, savings and offer, kept quiet. Motif: the accountant's pen marks — blue tick, highlighter, red circle, pencil squiggle — plus margin notes in handwriting. */
+:root {
+  --desk: #e4e9e7;
+  --paper: #ffffff;
+  --band: #e9f2e4;
+  --ink: #1c2320;
+  --muted: #5a6560;
+  --line: #cfd8d3;
+  --pen: #2346a8;      /* birome azul: tildes, notas, acción */
+  --pen-ink: #ffffff;
+  --red: #c2362b;      /* birome roja: lo que falta */
+  --hl: #fcf09c;       /* resaltador: para mirar */
+  --pencil: #737b80;   /* lápiz: gastos del banco */
+  --display: "Schibsted Grotesk", "Segoe UI", system-ui, sans-serif;
+  --body: "Public Sans", "Segoe UI", system-ui, sans-serif;
+  --hand: "Kalam", "Segoe Print", "Comic Sans MS", cursive;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --desk: #0f1312; --paper: #181e1c; --band: #1e2823; --ink: #e5ebe8; --muted: #9ca8a2; --line: #2c3632;
+    --pen: #93abff; --pen-ink: #0c1430; --red: #ff8b7d; --hl: rgba(250, 222, 90, 0.2); --pencil: #a2aaae;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --desk: #0f1312; --paper: #181e1c; --band: #1e2823; --ink: #e5ebe8; --muted: #9ca8a2; --line: #2c3632;
+  --pen: #93abff; --pen-ink: #0c1430; --red: #ff8b7d; --hl: rgba(250, 222, 90, 0.2); --pencil: #a2aaae;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--desk); color: var(--ink); font: 400 1rem/1.6 var(--body); }
+.wrap { max-width: 1080px; margin: 0 auto; padding: 32px 20px 96px; display: grid; gap: 64px; }
+h1, h2, h3 { font-family: var(--display); font-weight: 800; line-height: 1.08; text-wrap: balance; margin: 0; letter-spacing: -0.015em; }
+p { margin: 0; }
+:focus-visible { outline: 3px solid var(--pen); outline-offset: 2px; border-radius: 4px; }
+.num { font-variant-numeric: tabular-nums; }
+button { font: inherit; color: inherit; }
+
+/* Pitch */
+.hero { display: grid; gap: 18px; max-width: 760px; }
+.brand { font: 600 0.95rem var(--display); color: var(--muted); }
+.brand b { color: var(--ink); }
+.hero h1 { font-size: clamp(2.1rem, 5.4vw, 3.6rem); }
+.hero p { font-size: 1.15rem; color: var(--muted); max-width: 36em; }
+
+/* The statement */
+.sheet { position: relative; background: var(--paper); padding: 0 40px; box-shadow: 0 1px 0 var(--line), 0 18px 40px -28px rgba(20, 30, 25, 0.45); }
+.sheet::before, .sheet::after {
+  content: ""; position: absolute; top: 0; bottom: 0; width: 28px;
+  background-image: radial-gradient(circle at 50% 14px, var(--desk) 5px, transparent 5.6px);
+  background-size: 100% 28px;
+}
+.sheet::before { left: 0; border-right: 1px dashed var(--line); }
+.sheet::after { right: 0; border-left: 1px dashed var(--line); }
+
+.sheet-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 14px 24px; align-items: start; padding: 26px 8px 20px; border-bottom: 2px solid var(--ink); }
+.who { display: grid; gap: 2px; }
+.who strong { font: 800 1.35rem/1.2 var(--display); }
+.who span { color: var(--muted); font-size: 0.95rem; }
+.who .tag { justify-self: start; margin-top: 6px; font: 400 1rem/1 var(--hand); color: var(--red); transform: rotate(-2deg); }
+.who .tag.mine { color: var(--pen); }
+.switch { display: inline-flex; border: 1.5px solid var(--ink); border-radius: 6px; overflow: hidden; }
+.switch button { padding: 7px 18px; border: 0; background: none; cursor: pointer; font-weight: 600; font-size: 0.95rem; color: var(--muted); }
+.switch button + button { border-left: 1.5px solid var(--ink); }
+.switch button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+#headline { grid-column: 1 / -1; font: 600 clamp(1.15rem, 2.4vw, 1.45rem)/1.35 var(--display); max-width: 34em; }
+#headline b { color: var(--pen); }
+
+/* Key: legend and filter in one */
+.key { display: flex; flex-wrap: wrap; gap: 4px 6px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.key button { display: inline-grid; grid-template-columns: 30px auto; grid-template-rows: auto auto; column-gap: 8px; align-items: center; text-align: left; padding: 8px 14px 8px 8px; border: 0; border-bottom: 3px solid transparent; background: none; cursor: pointer; }
+.key button:hover { background: var(--band); }
+.key button[aria-pressed="true"] { border-bottom-color: currentColor; }
+.key .mark { grid-row: 1 / span 2; }
+.key b { font: 800 1.05rem/1.2 var(--display); }
+.key b .n { margin-right: 6px; }
+.key small { color: var(--muted); font-size: 0.85rem; line-height: 1.3; }
+.key .ok { color: var(--pen); } .key .look { color: var(--ink); } .key .due { color: var(--red); } .key .fee { color: var(--pencil); }
+.key .look .mark { background: var(--hl); border-radius: 4px; }
+.key b, .key small { color: var(--ink); } .key small { color: var(--muted); }
+
+/* Pen marks */
+.mark { width: 30px; height: 30px; display: block; overflow: visible; }
+.mark path { fill: none; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+.mark circle { fill: currentColor; }
+.m-ok { color: var(--pen); } .m-look { color: var(--pen); } .m-due { color: var(--red); } .m-fee { color: var(--pencil); }
+.m-fee path { stroke-width: 1.8; }
+.drawing .rows .mark path { stroke-dasharray: 1; stroke-dashoffset: 1; animation: draw 0.42s ease-out forwards; animation-delay: calc(var(--i) * 55ms + 150ms); }
+.drawing .rows .mark circle { opacity: 0; animation: dot 0.1s forwards; animation-delay: calc(var(--i) * 55ms + 520ms); }
+@keyframes draw { to { stroke-dashoffset: 0; } }
+@keyframes dot { to { opacity: 1; } }
+
+.cols, .row { display: grid; grid-template-columns: 62px 34px minmax(0, 1fr) 132px 140px; column-gap: 14px; padding-inline: 8px; }
+.cols { padding-block: 10px 6px; font-size: 0.82rem; font-weight: 600; color: var(--muted); }
+.cols .r { text-align: right; }
+.rows { list-style: none; margin: 0; padding: 0 0 8px; max-height: 640px; overflow-y: auto; }
+.row { align-items: start; padding-block: 12px; }
+.row:nth-child(odd) { background: var(--band); }
+.row.look { background-image: linear-gradient(var(--hl), var(--hl)); background-size: 100% calc(100% - 8px); background-position: 0 4px; background-repeat: no-repeat; }
+.row .date { font-size: 0.9rem; color: var(--muted); padding-top: 2px; }
+.row .mark { margin-top: -3px; }
+.row .what { font-weight: 600; }
+.row .how { color: var(--muted); font-size: 0.92rem; overflow-wrap: anywhere; }
+.row .todo { margin-top: 2px; font-size: 0.92rem; font-weight: 700; }
+.row.due .todo { color: var(--red); } .row.look .todo { color: var(--ink); } .row.fee .todo { color: var(--pencil); }
+.row .amt { text-align: right; font-weight: 700; white-space: nowrap; }
+.row .amt small { display: block; font-weight: 500; color: var(--muted); font-size: 0.8rem; white-space: normal; }
+.row .note span { white-space: nowrap; }
+.row .note { font: 400 1.05rem/1.25 var(--hand); transform: rotate(-1.5deg); transform-origin: left center; padding-top: 1px; }
+.row.ok .note { color: var(--pen); } .row.look .note { color: var(--pen); } .row.due .note { color: var(--red); } .row.fee .note { color: var(--pencil); }
+.empty { padding: 40px 16px; color: var(--muted); text-align: center; }
+
+.sheet-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; padding: 14px 8px 22px; border-top: 2px solid var(--ink); }
+.sheet-foot p { color: var(--muted); font-size: 0.92rem; flex: 1 1 260px; }
+.btn { padding: 10px 18px; border-radius: 6px; border: 1.5px solid var(--pen); background: var(--pen); color: var(--pen-ink); font-weight: 600; cursor: pointer; }
+.btn:hover { filter: brightness(1.08); }
+.link { padding: 6px 2px; border: 0; background: none; color: var(--pen); font-weight: 600; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+
+/* Client folders: tabs on top of the sheet */
+.folder { display: grid; }
+.tabs { display: flex; gap: 4px; padding-inline: 40px; overflow-x: auto; scrollbar-width: none; }
+.tabs button { flex: none; display: grid; text-align: left; padding: 10px 18px 9px; border: 0; border-radius: 8px 8px 0 0; background: color-mix(in srgb, var(--paper) 45%, var(--desk)); color: var(--muted); cursor: pointer; }
+.tabs button:hover { background: color-mix(in srgb, var(--paper) 75%, var(--desk)); }
+.tabs button[aria-selected="true"] { background: var(--paper); color: var(--ink); }
+.tabs b { font: 700 0.95rem/1.3 var(--display); white-space: nowrap; }
+.tabs small { font-size: 0.8rem; white-space: nowrap; }
+.tabs small.closed { color: var(--pen); font-weight: 700; }
+.sheet-head { position: relative; }
+.closed-stamp { position: absolute; right: 8px; bottom: 12px; margin: 0; padding: 0 12px; font: 700 1.6rem/1.3 var(--hand); color: var(--pen); border: 2.5px solid currentColor; border-radius: 8px; transform: rotate(-7deg); pointer-events: none; }
+
+/* Row actions */
+.acts { display: flex; flex-wrap: wrap; gap: 6px 8px; margin-top: 8px; }
+.acts button, .acts select { font: 600 0.86rem var(--body); padding: 5px 12px; border-radius: 6px; border: 1.5px solid var(--pen); background: var(--paper); color: var(--pen); cursor: pointer; }
+.acts .primary { background: var(--pen); color: var(--pen-ink); }
+.acts select { padding-right: 8px; max-width: 100%; }
+.row .done { margin-top: 4px; font-size: 0.92rem; font-weight: 700; color: var(--pen); }
+.row.due .done { color: var(--red); }
+.undo { border: 0; background: none; padding: 0 2px; color: var(--muted); font-weight: 600; font-size: 0.88rem; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.row .amt.inv { color: var(--muted); font-weight: 600; }
+.rows .row.fresh .mark path { stroke-dasharray: 1; stroke-dashoffset: 1; animation: draw 0.45s ease-out forwards; }
+.rows .row.fresh .mark circle { opacity: 0; animation: dot 0.1s 0.4s forwards; }
+.row:focus { outline: none; }
+.row:focus-visible { outline: 3px solid var(--pen); outline-offset: -3px; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+/* Month close: balances, bank charges entry, questions for the client */
+.close { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-top: 2px solid var(--ink); }
+.close[hidden] { display: none; }
+.close > div { display: grid; gap: 10px; align-content: start; padding: 18px 8px 20px; }
+.close > div + div { border-left: 1px solid var(--line); padding-left: 20px; }
+.close h3 { font-size: 1.05rem; }
+.ledger { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 14px; margin: 0; font-size: 0.93rem; }
+.ledger dt { color: var(--muted); }
+.ledger dt small { display: block; font-size: 0.8rem; line-height: 1.35; }
+.ledger dd { margin: 0; text-align: right; font-weight: 600; white-space: nowrap; }
+.ledger .tot { border-top: 1.5px solid var(--ink); padding-top: 6px; color: var(--ink); font-weight: 800; }
+.check { display: flex; gap: 6px; align-items: flex-start; font-size: 0.9rem; color: var(--muted); }
+.check.ok { color: var(--pen); font-weight: 600; }
+.check.bad { color: var(--red); font-weight: 600; }
+.check .mark { flex: none; width: 22px; height: 22px; }
+.asks { margin: 0; padding-left: 20px; display: grid; gap: 8px; font-size: 0.92rem; }
+.quiet { color: var(--muted); font-size: 0.92rem; }
+.btn.ghost { background: var(--paper); color: var(--pen); }
+a.btn { text-decoration: none; display: inline-block; }
+.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+dialog { width: min(560px, calc(100% - 32px)); padding: 24px; border: 0; border-radius: 6px; background: var(--paper); color: var(--ink); box-shadow: 0 24px 60px -20px rgba(0, 0, 0, 0.5); }
+dialog::backdrop { background: rgba(12, 18, 15, 0.55); }
+dialog h2 { font-size: 1.4rem; margin-bottom: 6px; }
+dialog p { color: var(--muted); font-size: 0.93rem; margin-bottom: 14px; }
+dialog textarea { width: 100%; padding: 12px 14px; border: 1.5px solid var(--line); border-radius: 6px; background: var(--band); color: var(--ink); font: 400 0.95rem/1.55 var(--body); resize: vertical; }
+.dlg-acts { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+.samples { color: var(--muted); font-size: 0.93rem; }
+.samples .link { font-size: inherit; padding: 0 1px; }
+
+/* Try it */
+.try { display: grid; gap: 18px; }
+.try h2, .below h2 { font-size: clamp(1.55rem, 3.2vw, 2.1rem); }
+.try > p, .below > p { color: var(--muted); max-width: 60ch; }
+.drops { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.drop { position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 14px; row-gap: 2px; padding: 20px 22px; border: 2px dashed var(--line); border-radius: 8px; background: var(--paper); cursor: pointer; }
+.drop:hover, .drop.over { border-color: var(--pen); }
+.drop:focus-within { outline: 3px solid var(--pen); outline-offset: 2px; }
+.drop input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.drop .step { grid-row: 1 / span 3; width: 34px; height: 34px; border-radius: 50%; border: 2px solid var(--pen); color: var(--pen); display: grid; place-items: center; font: 800 1rem var(--display); font-style: normal; }
+.drop strong { font: 800 1.12rem var(--display); }
+.drop span { color: var(--muted); font-size: 0.93rem; }
+.drop .done { color: var(--pen); font: 700 1.05rem var(--hand); }
+.msg { padding: 12px 16px; border-left: 3px solid var(--line); background: var(--paper); color: var(--muted); font-size: 0.95rem; }
+.msg.err { color: var(--red); border-left-color: var(--red); }
+.msg.okmsg { color: var(--ink); border-left-color: var(--pen); }
+.opts { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: center; color: var(--muted); font-size: 0.95rem; }
+.opts select { font: 500 0.95rem var(--body); padding: 6px 10px; border-radius: 6px; border: 1.5px solid var(--line); background: var(--paper); color: var(--ink); }
+.safe { color: var(--muted); font-size: 0.93rem; }
+.safe b { color: var(--ink); }
+
+/* Below: quiet sections on the desk */
+.below { display: grid; gap: 18px; }
+.steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 28px; counter-reset: s; }
+.steps li { display: grid; gap: 6px; align-content: start; padding-top: 14px; border-top: 2px solid var(--ink); counter-increment: s; }
+.steps li::before { content: counter(s); font: 800 1.6rem/1 var(--display); color: var(--pen); }
+.steps b { font: 800 1.08rem var(--display); }
+.steps span { color: var(--muted); font-size: 0.95rem; }
+
+.calc { background: var(--paper); padding: 24px; display: grid; gap: 20px; border-top: 2px solid var(--ink); }
+.calc .ins { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.calc label { display: grid; gap: 6px; font-size: 0.92rem; color: var(--muted); }
+.calc input { font: 600 1.15rem var(--body); padding: 10px 12px; border: 0; border-bottom: 2px solid var(--line); border-radius: 0; background: var(--band); color: var(--ink); width: 100%; min-width: 0; font-variant-numeric: tabular-nums; }
+.calc input:focus { border-bottom-color: var(--pen); }
+.calc .out { display: flex; flex-wrap: wrap; gap: 8px 40px; align-items: baseline; }
+.calc .out strong { font: 800 clamp(2rem, 5vw, 2.8rem)/1 var(--display); color: var(--ink); }
+.calc .out span { color: var(--muted); }
+.calc small { color: var(--muted); font-size: 0.85rem; }
+
+.more { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 28px; }
+.more li { display: grid; gap: 2px; padding: 14px 0; border-bottom: 1px solid var(--line); }
+.more .from { color: var(--muted); font-size: 0.93rem; text-decoration: line-through; text-decoration-color: var(--red); }
+.more .to { font-weight: 600; }
+
+.offer { background: var(--pen); color: var(--pen-ink); padding: 36px 32px; display: grid; gap: 12px; border-radius: 4px; }
+.offer h2 { font-size: clamp(1.6rem, 3.4vw, 2.3rem); }
+.offer p { max-width: 58ch; }
+.offer .price { font: 800 1.3rem var(--display); }
+
+@media (max-width: 860px) {
+  .cols, .row { grid-template-columns: 30px minmax(0, 1fr) auto; }
+  .cols { display: none; }
+  .row { row-gap: 2px; }
+  .row .mark { grid-column: 1; grid-row: 1 / span 3; }
+  .row .date { grid-column: 2; grid-row: 1; padding: 0; }
+  .row .main { grid-column: 2 / -1; grid-row: 2; }
+  .row .amt { grid-column: 3; grid-row: 1; }
+  .row .note { grid-column: 2 / -1; grid-row: 3; }
+  .close { grid-template-columns: minmax(0, 1fr); }
+  .close > div + div { border-left: 0; border-top: 1px solid var(--line); padding-left: 8px; }
+}
+@media (max-width: 640px) {
+  .wrap { padding-inline: 16px; gap: 52px; }
+  .sheet { padding: 0 14px; margin-inline: -16px; }
+  .sheet::before, .sheet::after { display: none; }
+  .tabs { margin-inline: -16px; padding-inline: 16px; }
+  .tabs button { padding-inline: 14px; }
+  .closed-stamp { position: static; justify-self: start; }
+  .sheet-foot .btn { flex: 1 1 auto; }
+  .sheet-head { grid-template-columns: minmax(0, 1fr); padding-inline: 2px; }
+  .key button { flex: 1 1 calc(50% - 6px); }
+  .drops, .steps, .more, .calc .ins { grid-template-columns: minmax(0, 1fr); }
+  .steps { gap: 20px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .drawing .rows .mark path, .drawing .rows .mark circle, .rows .row.fresh .mark path, .rows .row.fresh .mark circle { animation: none; stroke-dashoffset: 0; opacity: 1; }
+}
+</style>
+
+<div class="wrap">
+  <header class="hero">
+    <p class="brand"><b>Planilla a Sistema</b>, para estudios contables</p>
+    <h1>El extracto del mes, tildado solo. Vos mirás lo que no cierra.</h1>
+    <p>Subís Mis Comprobantes y el extracto del banco. Cada movimiento queda tildado contra su factura, y quedan aparte las retenciones, los pagos agrupados, lo que falta cobrar y los gastos del banco.</p>
+  </header>
+
+  <section class="folder" aria-label="Conciliación del mes">
+    <div class="tabs" id="tabs" role="tablist" aria-label="Clientes del estudio"></div>
+    <div class="sheet" id="sheet" role="tabpanel">
+      <div class="sheet-head">
+        <div class="who">
+          <strong id="who">Del Valle Insumos SRL</strong>
+          <span id="period">Septiembre 2026</span>
+          <span class="tag" id="stamp">cliente de ejemplo</span>
+        </div>
+        <div class="switch" role="group" aria-label="Qué movimientos ver">
+          <button type="button" id="dir-all" aria-pressed="true">Todo</button>
+          <button type="button" id="dir-ventas" aria-pressed="false">Cobros</button>
+          <button type="button" id="dir-compras" aria-pressed="false">Pagos</button>
+        </div>
+        <p id="headline"></p>
+        <p class="closed-stamp" id="closed" hidden>conciliado</p>
+      </div>
+      <div class="key" id="groups" role="group" aria-label="Filtrar por resultado"></div>
+      <div class="cols" aria-hidden="true"><span>Fecha</span><span></span><span id="list-title">Todo el mes</span><span class="r">Importe</span><span>Al margen</span></div>
+      <ul class="rows" id="items"></ul>
+      <div class="close" id="close">
+        <div id="close-saldo"></div>
+        <div id="close-fees"></div>
+        <div id="close-asks"></div>
+      </div>
+      <div class="sheet-foot">
+        <p>Tocá un grupo para ver solo esos. <button type="button" class="link" id="show-all" hidden>Ver todo el mes</button></p>
+        <button type="button" class="btn ghost" id="compose">Armar mensaje para el cliente</button>
+        <button type="button" class="btn ghost" id="copy">Copiar para Excel</button>
+        <button type="button" class="btn" id="xlsx">Descargar Excel</button>
+      </div>
+    </div>
+  </section>
+
+  <dialog id="msg-dialog" aria-labelledby="msg-title">
+    <h2 id="msg-title">Mensaje para el cliente</h2>
+    <p>Sale de lo que quedó sin resolver. Editalo si querés antes de mandarlo.</p>
+    <label class="sr" for="msg-text">Texto del mensaje</label>
+    <textarea id="msg-text" rows="12"></textarea>
+    <div class="dlg-acts">
+      <button type="button" class="btn ghost" id="msg-close">Cerrar</button>
+      <button type="button" class="btn ghost" id="msg-copy">Copiar mensaje</button>
+      <a class="btn" id="wa" href="https://wa.me/" target="_blank" rel="noopener">Abrir en WhatsApp</a>
+    </div>
+  </dialog>
+
+  <section class="try" aria-label="Probar con tus archivos">
+    <h2>Probalo con un cliente tuyo</h2>
+    <p>Los mismos archivos que ya bajás todos los meses. Arrastralos o tocá para elegirlos: se abre una pestaña nueva con tu cliente, tildada con tus datos.</p>
+    <div class="drops">
+      <label class="drop" for="f-comp" id="drop-comp">
+        <input type="file" id="f-comp" accept=".csv,.txt,.xlsx,.xls" multiple>
+        <i class="step" aria-hidden="true">1</i>
+        <strong>Mis Comprobantes</strong>
+        <span>Emitidos, Recibidos o los dos juntos, como los bajás de ARCA (Excel o CSV).</span>
+        <span class="done" id="done-comp" hidden></span>
+      </label>
+      <label class="drop" for="f-bank" id="drop-bank">
+        <input type="file" id="f-bank" accept=".csv,.txt,.xlsx,.xls" multiple>
+        <i class="step" aria-hidden="true">2</i>
+        <strong>Extracto del banco</strong>
+        <span>Del mismo mes, en Excel o CSV desde el home banking.</span>
+        <span class="done" id="done-bank" hidden></span>
+      </label>
+    </div>
+    <p class="msg" id="msg" role="status"></p>
+    <p class="samples" id="samples">¿No tenés los archivos a mano? Bajá los del cliente de ejemplo que estás viendo:
+      <button type="button" class="link" data-file="emitidos">Emitidos</button>,
+      <button type="button" class="link" data-file="recibidos">Recibidos</button> y
+      <button type="button" class="link" data-file="extracto">Extracto</button>.</p>
+    <div class="opts">
+      <label for="window">Esperar el pago hasta
+        <select id="window">
+          <option value="15">15 días</option>
+          <option value="30" selected>30 días</option>
+          <option value="60">60 días</option>
+        </select>
+        después de la factura</label>
+      <button type="button" class="link" id="reset" hidden>Volver al ejemplo</button>
+    </div>
+    <p class="safe"><b>Tus archivos no salen de tu computadora.</b> Se leen en el navegador y no se suben a ningún lado.</p>
+  </section>
+
+  <section class="below">
+    <h2>Cómo funciona en tu estudio</h2>
+    <ol class="steps">
+      <li><b>Bajás los archivos como siempre</b><span>Mis Comprobantes y el extracto. Si ya usás un descargador automático, lo tomamos de ahí.</span></li>
+      <li><b>Se concilia solo, cliente por cliente</b><span>Por CUIT, importe y fecha. Reconoce pagos de varias facturas juntas, retenciones y gastos del banco.</span></li>
+      <li><b>Te llega solo lo que hay que mirar</b><span>Una lista por cliente, lista para pegar en tu sistema o mandársela al cliente.</span></li>
+    </ol>
+  </section>
+
+  <section class="below">
+    <h2>¿Cuánto les cuesta hoy hacerlo a mano?</h2>
+    <div class="calc">
+      <div class="ins">
+        <label for="c-clientes">Clientes que concilian
+          <input id="c-clientes" type="number" min="1" step="1" value="40" inputmode="numeric"></label>
+        <label for="c-min">Minutos por cliente al mes
+          <input id="c-min" type="number" min="1" step="5" value="60" inputmode="numeric"></label>
+        <label for="c-hora">Costo de una hora ($)
+          <input id="c-hora" type="number" min="1" step="100" value="8750" inputmode="numeric"></label>
+      </div>
+      <div class="out">
+        <div><strong class="num" id="c-pesos">$ 350.000</strong> <span>por mes</span></div>
+        <div><strong class="num" id="c-horas">40 h</strong> <span>de trabajo a mano</span></div>
+      </div>
+      <small>La hora de referencia es la de un administrativo de Comercio en octubre de 2026, con aguinaldo y cargas (estimado). Cambiala por la de tu estudio.</small>
+    </div>
+  </section>
+
+  <section class="below">
+    <h2>Y lo mismo para otras tareas del mes</h2>
+    <ul class="more">
+      <li><span class="from">Pedirle papeles a cada cliente, uno por uno</span><span class="to">Recordatorio automático con lo que le falta y un link para subirlo</span></li>
+      <li><span class="from">La planilla del cierre, siempre desactualizada</span><span class="to">Tablero del mes: qué falta de cada cliente y quién lo tiene</span></li>
+      <li><span class="from">Sumar lo facturado antes de recategorizar</span><span class="to">Aviso cuando un monotributista pasa el 80% de su tope</span></li>
+      <li><span class="from">Acomodar el Excel de ARCA para tu sistema</span><span class="to">Conversor al formato de tu sistema contable, sin errores</span></li>
+    </ul>
+  </section>
+
+  <section class="offer">
+    <h2>Empezamos con una charla de 30 minutos</h2>
+    <p>Me mostrás la tarea que más horas les lleva y en 48 horas te mando qué haría, en cuánto tiempo y cuánto sale. Sin cargo.</p>
+    <p class="price">Desde USD 50 por mes, con armado y mantenimiento incluidos.</p>
+    <p>Los datos de tus clientes quedan en la cuenta del estudio. Nunca pedimos claves fiscales.</p>
+  </section>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+(() => {
+  // ---------- Sample data (invented), written in the same format ARCA and banks export ----------
+  // Emitidos: literal header of the Mis Comprobantes format in use until Aug 2025.
+  const HEAD_EMIT = "Fecha de Emisión;Tipo de Comprobante;Punto de Venta;Número Desde;Número Hasta;Cód. Autorización;Tipo Doc. Receptor;Nro. Doc. Receptor;Denominación Receptor;Tipo Cambio;Moneda;Imp. Neto Gravado;Imp. Neto No Gravado;Imp. Op. Exentas;Otros Tributos;IVA;Imp. Total";
+  // Recibidos: same layout with "Emisor" (not verified against a real file).
+  const HEAD_RECI = HEAD_EMIT.replaceAll("Receptor", "Emisor");
+  const EMIT = [
+    ["01/09/2026", 1, 3, 1021, "30709845123", "ALMACEN SAN JOSE SA", 1452000],
+    ["02/09/2026", 1, 3, 1022, "20284561237", "KIOSCO RUTA 40 DE PAEZ LUIS", 385990],
+    ["04/09/2026", 1, 3, 1023, "30711223345", "SUPERMERCADO EL TREBOL SRL", 2118400],
+    ["08/09/2026", 1, 3, 1024, "30705551119", "MAYORISTA NORTE SA", 640200],
+    ["10/09/2026", 1, 3, 1025, "30705551119", "MAYORISTA NORTE SA", 312800],
+    ["12/09/2026", 6, 3, 1026, "20315557772", "PANADERIA LA ESPIGA DE RUIZ ANA", 98450],
+    ["15/09/2026", 1, 3, 1027, "30709845123", "ALMACEN SAN JOSE SA", 1210000],
+    ["17/09/2026", 3, 3, 88, "30709845123", "ALMACEN SAN JOSE SA", 48400],
+    ["19/09/2026", 1, 3, 1028, "30719002221", "HOTEL LOS CERROS SA", 3025000],
+    ["22/09/2026", 1, 3, 1029, "20284561237", "KIOSCO RUTA 40 DE PAEZ LUIS", 210540],
+    ["25/09/2026", 1, 3, 1030, "30711223345", "SUPERMERCADO EL TREBOL SRL", 1874300],
+  ];
+  const RECI = [
+    ["03/09/2026", 1, 5, 12877, "30701112228", "ENVASES DEL SUR SA", 890450],
+    ["05/09/2026", 1, 2, 4410, "30714445550", "TRANSPORTE RAPIDO SRL", 245000],
+    ["11/09/2026", 11, 1, 231, "20301112229", "GOMEZ MARTIN", 120000],
+    ["18/09/2026", 1, 5, 12990, "30701112228", "ENVASES DEL SUR SA", 412300],
+    ["23/09/2026", 1, 11, 78002, "30708889994", "DISTRIBUIDORA LITORAL SA", 1560000],
+  ];
+  const BANK = [
+    ["01/09/2026", "COMISION MANTENIMIENTO CUENTA", 18500, 0],
+    ["01/09/2026", "IVA 21% S/COMISION", 3885, 0],
+    ["03/09/2026", "TRANSF RECIBIDA CUIT 30709845123 ALMACEN SAN JOSE SA", 0, 1452000],
+    ["03/09/2026", "IMP LEY 25413 S/CREDITOS", 8712, 0],
+    ["05/09/2026", "DEPOSITO EN EFECTIVO SUC 214", 0, 150000],
+    ["09/09/2026", "DEPOSITO CHEQUE 48812", 0, 385990],
+    ["10/09/2026", "TRANSF ENVIADA CUIT 30701112228 ENVASES DEL SUR", 890450, 0],
+    ["10/09/2026", "IMP LEY 25413 S/DEBITOS", 5343, 0],
+    ["12/09/2026", "TRANSF ENVIADA CUIT 30714445550 TRANSPORTE RAPIDO", 237650, 0],
+    ["15/09/2026", "TRANSF RECIBIDA CUIT 30705551119 MAYORISTA NORTE SA", 0, 953000],
+    ["15/09/2026", "TRANSF ENVIADA CUIT 20255555551", 300000, 0],
+    ["18/09/2026", "TRANSF RECIBIDA CUIT 30711223345 SUPERMERCADO EL TREBOL", 0, 2055648],
+    ["20/09/2026", "DEBITO CHEQUE 77120", 120000, 0],
+    ["22/09/2026", "TRANSF RECIBIDA CUIT 30709845123 ALMACEN SAN JOSE SA", 0, 1210000],
+    ["26/09/2026", "TRANSF RECIBIDA CUIT 30719002221 HOTEL LOS CERROS", 0, 2934250],
+    ["29/09/2026", "TRANSF ENVIADA CUIT 30708889994 DISTRIBUIDORA LITORAL", 1560000, 0],
+    ["30/09/2026", "TRANSF RECIBIDA CUIT 30711223345 SUPERMERCADO EL TREBOL", 0, 1874300],
+    ["30/09/2026", "PERCEPCION SIRCREB", 42150, 0],
+  ];
+  // Second client: a monotributista physiotherapist paid by health insurers, patients and a wallet transfer.
+  const EMIT_F = [
+    ["01/09/2026", 11, 2, 341, "30712340018", "MUTUAL SALUD DEL OESTE", 184000],
+    ["01/09/2026", 11, 2, 342, "30715550027", "PREPAGA VITAL SA", 126500],
+    ["05/09/2026", 11, 2, 343, "27334445556", "SOSA MARIANA", 32000],
+    ["10/09/2026", 11, 2, 344, "20298887771", "PEREYRA JUAN CRUZ", 32000],
+    ["15/09/2026", 11, 2, 345, "30712340018", "MUTUAL SALUD DEL OESTE", 96000],
+    ["18/09/2026", 11, 2, 346, "27401112223", "ACOSTA VALENTINA", 48000],
+    ["24/09/2026", 11, 2, 347, "30715550027", "PREPAGA VITAL SA", 88000],
+  ];
+  const RECI_F = [
+    ["02/09/2026", 11, 4, 1209, "20276665554", "GOMEZ RAUL ALBERTO", 230000],
+    ["12/09/2026", 6, 8, 55123, "30709998881", "ORTOPEDIA SAN MARTIN SRL", 41800],
+  ];
+  const BANK_F = [
+    ["01/09/2026", "COMISION PAQUETE CUENTA PROFESIONAL", 9800, 0],
+    ["01/09/2026", "IVA 21% S/COMISION", 2058, 0],
+    ["04/09/2026", "TRANSF ENVIADA CUIT 20276665554 GOMEZ RAUL", 230000, 0],
+    ["06/09/2026", "TRANSF RECIBIDA CUIT 27334445556 SOSA MARIANA", 0, 32000],
+    ["08/09/2026", "DEBITO AUTOMATICO MONOTRIBUTO ARCA", 52340, 0],
+    ["11/09/2026", "TRANSF RECIBIDA PEREYRA JUAN CRUZ", 0, 32000],
+    ["14/09/2026", "TRANSF ENVIADA CUIT 30709998881 ORTOPEDIA SAN MARTIN", 41800, 0],
+    ["16/09/2026", "TRANSF ENVIADA CUIT 27290001114", 120000, 0],
+    ["22/09/2026", "TRANSF RECIBIDA CUIT 30712340018 MUTUAL SALUD DEL OESTE", 0, 280000],
+    ["22/09/2026", "IMP LEY 25413 S/CREDITOS", 1680, 0],
+    ["29/09/2026", "TRANSF RECIBIDA CUIT 30715550027 PREPAGA VITAL", 0, 120175],
+    ["30/09/2026", "TRANSF RECIBIDA DESDE CVU 0000003100098765432101", 0, 48000],
+  ];
+  // Third client: a farm with large supplier payments, an e-cheq and a transfer to its own account.
+  const EMIT_T = [
+    ["07/09/2026", 1, 1, 512, "30708887776", "ACOPIO PAMPA SA", 8450000],
+    ["21/09/2026", 1, 1, 513, "30708887776", "ACOPIO PAMPA SA", 6120000],
+  ];
+  const RECI_T = [
+    ["02/09/2026", 1, 3, 8812, "30711119990", "SEMILLERA DEL NORTE SA", 3630000],
+    ["04/09/2026", 1, 7, 20451, "30704443332", "AGROQUIMICOS LITORAL SRL", 2178000],
+    ["09/09/2026", 1, 2, 3301, "30716667778", "FLETES RUTA 5 SRL", 605000],
+    ["16/09/2026", 1, 7, 20533, "30704443332", "AGROQUIMICOS LITORAL SRL", 1452000],
+    ["25/09/2026", 1, 12, 991, "30702221114", "COOPERATIVA AGRICOLA LOS TALAS", 968000],
+  ];
+  const BANK_T = [
+    ["01/09/2026", "COMISION MANTENIMIENTO CUENTA", 24500, 0],
+    ["01/09/2026", "IVA 21% S/COMISION", 5145, 0],
+    ["03/09/2026", "ECHEQ EMITIDO 45123 SEMILLERA DEL NORTE", 3630000, 0],
+    ["03/09/2026", "IMP LEY 25413 S/DEBITOS", 21780, 0],
+    ["11/09/2026", "TRANSF ENVIADA CUIT 30704443332 AGROQUIMICOS LITORAL", 2112660, 0],
+    ["11/09/2026", "IMP LEY 25413 S/DEBITOS", 12676, 0],
+    ["12/09/2026", "TRANSF ENVIADA CUIT 30716667778 FLETES RUTA 5", 605000, 0],
+    ["14/09/2026", "TRANSF RECIBIDA CUIT 30708887776 ACOPIO PAMPA SA", 0, 8450000],
+    ["14/09/2026", "IMP LEY 25413 S/CREDITOS", 50700, 0],
+    ["19/09/2026", "TRANSF ENVIADA CUIT 20231234561", 450000, 0],
+    ["26/09/2026", "TRANSF A CTA PROPIA 4021/7", 1500000, 0],
+    ["30/09/2026", "PERCEPCION SIRCREB", 88200, 0],
+  ];
+  const dec = (n) => n.toFixed(2).replace(".", ",");
+  function compsCsv(head, rows) {
+    return [head].concat(rows.map(([f, t, pv, n, cuit, name, total]) => {
+      const neto = t === 11 ? total : Math.round(total / 1.21 * 100) / 100;
+      const iva = Math.round((total - neto) * 100) / 100;
+      return [f, t, pv, n, n, "7639" + String(n).padStart(10, "0"), 80, cuit, name, "1,00", "PES", dec(neto), "0,00", "0,00", "0,00", dec(iva), dec(total)].join(";");
+    })).join("\n");
+  }
+  function bankCsv(rows = BANK, opening = 2500000) {
+    let saldo = opening;
+    return ["Fecha;Concepto;Débito;Crédito;Saldo"].concat(rows.map(([f, c, d, cr]) => {
+      saldo += cr - d;
+      return [f, c, d ? dec(d) : "", cr ? dec(cr) : "", dec(saldo)].join(";");
+    })).join("\n");
+  }
+
+  // ---------- Parsing ----------
+  const norm = (s) => String(s ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+  const DAY = 86400000;
+
+  function parseDelimited(text) {
+    const first = text.split(/\r?\n/).find((l) => l.trim()) || "";
+    const count = (ch) => first.split(ch).length - 1;
+    const delim = [";", "\t", ","].sort((a, b) => count(b) - count(a))[0];
+    const rows = []; let row = []; let cell = ""; let q = false;
+    for (let i = 0; i < text.length; i++) {
+      const c = text[i];
+      if (q) {
+        if (c === '"' && text[i + 1] === '"') { cell += '"'; i++; }
+        else if (c === '"') q = false;
+        else cell += c;
+      } else if (c === '"') q = true;
+      else if (c === delim) { row.push(cell); cell = ""; }
+      else if (c === "\n" || c === "\r") {
+        if (c === "\r" && text[i + 1] === "\n") i++;
+        row.push(cell); rows.push(row); row = []; cell = "";
+      } else cell += c;
+    }
+    if (cell !== "" || row.length) { row.push(cell); rows.push(row); }
+    return rows.filter((r) => r.some((x) => String(x).trim() !== ""));
+  }
+
+  function parseAmount(v) {
+    if (typeof v === "number") return v;
+    let s = String(v ?? "").replace(/[$\s ]/g, "");
+    if (!s) return 0;
+    let neg = false;
+    if (/^\(.*\)$/.test(s)) { neg = true; s = s.slice(1, -1); }
+    if (s.endsWith("-")) { neg = true; s = s.slice(0, -1); }
+    const lc = s.lastIndexOf(","), ld = s.lastIndexOf(".");
+    if (lc > -1 && ld > -1) s = lc > ld ? s.replace(/\./g, "").replace(",", ".") : s.replace(/,/g, "");
+    else if (lc > -1) s = s.replace(/\./g, "").replace(",", ".");
+    else if (/^-?\d{1,3}(\.\d{3})+$/.test(s)) s = s.replace(/\./g, "");
+    const n = parseFloat(s);
+    return isNaN(n) ? NaN : (neg ? -n : n);
+  }
+
+  function parseDate(v) {
+    if (v instanceof Date && !isNaN(v)) return new Date(v.getFullYear(), v.getMonth(), v.getDate());
+    if (typeof v === "number" && v > 20000 && v < 80000) {
+      const d = new Date(Math.round((v - 25569) * DAY));
+      return new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+    }
+    const s = String(v ?? "").trim();
+    let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+    if (m) return new Date(+m[1], +m[2] - 1, +m[3]);
+    m = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/);
+    if (m) { let y = +m[3]; if (y < 100) y += 2000; return new Date(y, +m[2] - 1, +m[1]); }
+    return null;
+  }
+
+  function findHeader(rows) {
+    for (let i = 0; i < Math.min(rows.length, 15); i++) {
+      if (rows[i].some((c) => norm(c).startsWith("fecha"))) return i;
+    }
+    return -1;
+  }
+  const col = (heads, test) => heads.findIndex(test);
+  const digits = (s) => String(s ?? "").replace(/\D/g, "");
+
+  const NC_CODES = new Set([3, 8, 13, 53, 203, 208, 213]);
+  const TYPE_NAMES = { 1: "Factura A", 2: "Nota de débito A", 3: "Nota de crédito A", 6: "Factura B", 7: "Nota de débito B", 8: "Nota de crédito B", 11: "Factura C", 12: "Nota de débito C", 13: "Nota de crédito C", 51: "Factura M", 53: "Nota de crédito M", 201: "FCE A", 203: "NC FCE A", 206: "FCE B", 208: "NC FCE B", 211: "FCE C", 213: "NC FCE C" };
+
+  function readComprobantes(rows) {
+    const h = findHeader(rows);
+    if (h < 0) throw new Error("No encontré la fila de títulos (una columna que empiece con “Fecha”). ¿Es el archivo de Mis Comprobantes?");
+    const heads = rows[h].map(norm);
+    // ARCA's Excel opens with a title row ("Mis Comprobantes Recibidos - CUIT ..."); use it when the columns don't say.
+    const title = rows.slice(0, h).flat().map(norm).join(" ");
+    const kind = heads.some((x) => x.includes("receptor")) ? "ventas" : heads.some((x) => x.includes("emisor")) ? "compras"
+      : /recibidos/.test(title) ? "compras" : /emitidos/.test(title) ? "ventas" : null;
+    const c = {
+      fecha: col(heads, (x) => x.startsWith("fecha")),
+      tipo: col(heads, (x) => x.includes("tipo") && x.includes("comprobante")),
+      pv: col(heads, (x) => x.includes("punto de venta")),
+      nro: col(heads, (x) => (x.includes("numero") || x === "nro." || x === "nro") && !x.includes("hasta") && !x.includes("doc")),
+      cuit: col(heads, (x) => x.includes("nro. doc") || x.includes("nro doc") || x.includes("cuit")),
+      name: col(heads, (x) => x.includes("denominacion")),
+      tc: col(heads, (x) => x.includes("tipo cambio") || x.includes("tipo de cambio")),
+      mon: col(heads, (x) => x === "moneda"),
+      total: col(heads, (x) => x === "imp. total" || x === "importe total" || x === "total"),
+    };
+    // Since 9/2025 point of sale and number can come in one column: don't read it twice.
+    if (c.nro === c.pv) c.nro = -1;
+    if (c.total < 0) {
+      // Newer layouts: take the last column that names a total, skipping partial totals.
+      heads.forEach((x, i) => { if (x.includes("total") && !x.includes("tributo") && !x.includes("iva")) c.total = i; });
+    }
+    const missing = [["fecha", c.fecha], ["importe total", c.total]].filter(([, i]) => i < 0).map(([n]) => n);
+    if (missing.length) throw new Error(`No encontré la columna de ${missing.join(" ni de ")}. Columnas leídas: ${rows[h].join(", ")}.`);
+    const out = [];
+    rows.slice(h + 1).forEach((r, i) => {
+      const fecha = parseDate(r[c.fecha]);
+      let total = parseAmount(r[c.total]);
+      if (!fecha || !total || isNaN(total)) return;
+      const tipoRaw = c.tipo >= 0 ? String(r[c.tipo]) : "";
+      const code = parseInt(tipoRaw, 10);
+      const isNC = NC_CODES.has(code) || norm(tipoRaw).includes("nota de credito");
+      const tc = c.tc >= 0 ? parseAmount(r[c.tc]) : 1;
+      const mon = c.mon >= 0 ? norm(r[c.mon]) : "pes";
+      if (mon && mon !== "pes" && tc > 0) total = Math.round(total * tc * 100) / 100;
+      const pv = c.pv >= 0 ? String(r[c.pv]).trim() : "";
+      const nro = c.nro >= 0 ? String(r[c.nro]).trim() : "";
+      const numero = pv && /^\d+$/.test(pv) && /^\d+$/.test(nro) ? `${pv.padStart(5, "0")}-${nro.padStart(8, "0")}` : [pv, nro].filter(Boolean).join("-");
+      out.push({
+        id: "c" + i, fecha, total: Math.abs(total), isNC,
+        tipo: TYPE_NAMES[code] || (tipoRaw && isNaN(code) ? tipoRaw : (code ? `Tipo ${code}` : "Comprobante")),
+        numero, cuit: c.cuit >= 0 ? digits(r[c.cuit]) : "", name: c.name >= 0 ? String(r[c.name]).trim() : "",
+      });
+    });
+    if (!out.length) throw new Error("Leí el archivo pero no encontré comprobantes con fecha e importe.");
+    return { kind, comps: out };
+  }
+
+  function readBank(rows) {
+    const h = findHeader(rows);
+    if (h < 0) throw new Error("No encontré la fila de títulos del extracto (una columna que empiece con “Fecha”).");
+    const heads = rows[h].map(norm);
+    const c = {
+      fecha: col(heads, (x) => x.startsWith("fecha")),
+      desc: col(heads, (x) => /concepto|descripcion|detalle|movimiento|referencia/.test(x)),
+      deb: col(heads, (x) => /debito|debe|egreso/.test(x)),
+      cred: col(heads, (x) => /credito|haber|ingreso/.test(x)),
+      imp: col(heads, (x) => /importe|monto/.test(x)),
+      saldo: col(heads, (x) => x.startsWith("saldo")),
+    };
+    if (c.deb < 0 && c.cred < 0 && c.imp < 0) throw new Error(`No encontré columnas de Débito y Crédito ni de Importe. Columnas leídas: ${rows[h].join(", ")}.`);
+    const out = [];
+    rows.slice(h + 1).forEach((r, i) => {
+      const fecha = parseDate(r[c.fecha]);
+      if (!fecha) return;
+      let amt;
+      if (c.deb >= 0 || c.cred >= 0) {
+        const d = c.deb >= 0 ? Math.abs(parseAmount(r[c.deb]) || 0) : 0;
+        const cr = c.cred >= 0 ? Math.abs(parseAmount(r[c.cred]) || 0) : 0;
+        amt = cr - d;
+      } else amt = parseAmount(r[c.imp]);
+      if (!amt || isNaN(amt)) return;
+      const desc = c.desc >= 0 ? String(r[c.desc]).trim() : "";
+      const saldo = c.saldo >= 0 && String(r[c.saldo]).trim() !== "" ? parseAmount(r[c.saldo]) : NaN;
+      out.push({ id: "m" + i, fecha, amt, desc, saldo });
+    });
+    if (!out.length) throw new Error("Leí el extracto pero no encontré movimientos con fecha e importe.");
+    return out;
+  }
+
+  async function fileRows(file) {
+    const buf = await file.arrayBuffer();
+    if (/\.(csv|txt)$/i.test(file.name)) {
+      let text;
+      try { text = new TextDecoder("utf-8", { fatal: true }).decode(buf); }
+      catch { text = new TextDecoder("windows-1252").decode(buf); }
+      return parseDelimited(text.replace(/^﻿/, ""));
+    }
+    if (typeof XLSX === "undefined") throw new Error("No se pudo cargar el lector de Excel. Guardá el archivo como CSV y subilo de nuevo.");
+    const wb = XLSX.read(buf, { type: "array", cellDates: true });
+    return XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: true, defval: "" });
+  }
+
+  // ---------- Matching ----------
+  const BANK_FEE = /comision|ley 25413|ley 25\.413|imp\.? ?(deb|cred)|impuesto (a los )?(deb|cred)|\biva\b|sellos|mantenimiento|percep|sircreb|retencion|interes|cargo|\bvep\b|monotributo/;
+  const STOP = new Set(["sa", "srl", "sas", "s.a.", "s.r.l.", "de", "del", "la", "las", "los", "el", "y", "e", "hijos", "cia"]);
+  const near = (a, b) => Math.abs(a - b) < 1.0;
+
+  function reconcile(comps, movsAll, mode, windowDays) {
+    const sign = mode === "ventas" ? 1 : -1;
+    const movs = movsAll.filter((m) => Math.sign(m.amt) === sign).map((m) => ({ ...m, abs: Math.abs(m.amt), dnorm: norm(m.desc), cuits: m.desc.replace(/(\d)-(\d)/g, "$1$2").match(/\b\d{11}\b/g) || [] }));
+    const inv = comps.filter((c) => !c.isNC);
+    const used = new Set();
+    const rows = [];
+    const inWindow = (c, m) => m.fecha - c.fecha >= -3 * DAY && m.fecha - c.fecha <= windowDays * DAY;
+    const tokens = (name) => norm(name).split(/[^a-z0-9]+/).filter((t) => t.length >= 4 && !STOP.has(t));
+    const party = (c, m) => (c.cuit && m.cuits.includes(c.cuit)) || tokens(c.name).some((t) => m.dnorm.includes(t));
+    const foreign = (c, m) => m.cuits.length > 0 && c.cuit && !m.cuits.includes(c.cuit);
+    const free = (x) => !used.has(x.id);
+    const take = (status, cs, ms, extra = {}) => { cs.concat(ms).forEach((x) => used.add(x.id)); rows.push({ status, comps: cs, movs: ms, ...extra }); };
+
+    // 1. Same party, same amount.
+    inv.forEach((c) => {
+      const m = movs.filter((m) => free(m) && inWindow(c, m) && near(m.abs, c.total) && party(c, m)).sort((a, b) => a.fecha - b.fecha)[0];
+      if (m && free(c)) take("ok", [c], [m]);
+    });
+    // 2. One payment for several invoices of the same party.
+    movs.filter(free).forEach((m) => {
+      const cands = inv.filter((c) => free(c) && party(c, m) && inWindow(c, m));
+      const n = cands.length;
+      for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) {
+        if (!free(m) || !free(cands[i]) || !free(cands[j])) continue;
+        if (near(cands[i].total + cands[j].total, m.abs)) { take("grupo", [cands[i], cands[j]], [m]); continue; }
+        for (let k = j + 1; k < n; k++) {
+          if (free(m) && free(cands[k]) && near(cands[i].total + cands[j].total + cands[k].total, m.abs)) take("grupo", [cands[i], cands[j], cands[k]], [m]);
+        }
+      }
+    });
+    // 3. Same party, paid a bit less: withholdings.
+    inv.filter(free).forEach((c) => {
+      const m = movs.filter((m) => free(m) && inWindow(c, m) && party(c, m) && m.abs < c.total && m.abs >= c.total * 0.85)
+        .sort((a, b) => b.abs - a.abs)[0];
+      if (m) take("ret", [c], [m], { diff: c.total - m.abs });
+    });
+    // 4. Same amount and close date, party not named in the statement.
+    inv.filter(free).forEach((c) => {
+      const m = movs.filter((m) => free(m) && inWindow(c, m) && near(m.abs, c.total) && !foreign(c, m))
+        .sort((a, b) => Math.abs(a.fecha - c.fecha) - Math.abs(b.fecha - c.fecha))[0];
+      if (m) take("monto", [c], [m]);
+    });
+    inv.filter(free).forEach((c) => take("pend", [c], []));
+    comps.filter((c) => c.isNC).forEach((c) => take("nc", [c], []));
+    movs.filter(free).forEach((m) => take(BANK_FEE.test(m.dnorm) ? "gasto" : "sincomp", [], [m]));
+
+    const first = (r) => (r.comps[0] || r.movs[0]).fecha;
+    rows.sort((a, b) => first(a) - first(b));
+    return { rows, movs };
+  }
+
+  // ---------- Rendering ----------
+  const money = new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", minimumFractionDigits: 2 });
+  const money0 = new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 0 });
+  const fmt = (n) => Math.abs(n - Math.round(n)) < 0.005 ? money0.format(n) : money.format(n);
+  const fdate = (d) => d.toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric" });
+  const fday = (d) => d.toLocaleDateString("es-AR", { day: "numeric", month: "short" }).replace(".", "");
+  const fcuit = (s) => s.length === 11 ? `${s.slice(0, 2)}-${s.slice(2, 10)}-${s.slice(10)}` : s;
+  const esc = (s) => String(s).replace(/[&<>"]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch]));
+  const KEEP_UP = new Set(["SA", "SRL", "SAS", "SH", "SCA", "SC", "IVA", "CUIT", "SIRCREB", "IIBB", "ARBA", "AGIP", "ARCA"]);
+  const KEEP_LOW = new Set(["de", "del", "y", "e"]);
+  const nice = (s) => String(s || "").trim().split(/\s+/).map((w, i) => {
+    const up = w.toUpperCase().replace(/\./g, ""), low = w.toLowerCase();
+    if (KEEP_UP.has(up)) return w.toUpperCase();
+    if (i > 0 && KEEP_LOW.has(low)) return low;
+    if (low.startsWith("s/")) return "s/" + low.slice(2);
+    return w.charAt(0).toUpperCase() + low.slice(1);
+  }).join(" ");
+  const shortTipo = (c) => c.tipo.replace("Factura", "factura").replace("Nota de crédito", "nota de crédito").replace("Nota de débito", "nota de débito");
+
+  // Eight match statuses fold into four groups people recognise.
+  const GROUP_OF = { ok: "ok", grupo: "ok", ret: "look", monto: "look", nc: "look", pend: "due", sincomp: "due", gasto: "fee" };
+  const GROUPS = {
+    ok: { t: "Listo", d: "Tildado contra su factura" },
+    look: { t: "Para mirar", d: "Retenciones y dudas" },
+    due: { t: "Pendiente", d: "Sin cobro, sin pago o sin factura" },
+    fee: { t: "Gastos del banco", d: "Comisiones e impuestos" },
+  };
+  // Hand-drawn pen marks, one per group: blue tick, question mark (on highlighter), red circle, pencil squiggle.
+  const MARKS = {
+    ok: '<path pathLength="1" d="M5 17c2.6 1.5 4.6 3.9 6.4 7.3C14.7 15 19.7 8.7 27.5 4.6"/>',
+    look: '<path pathLength="1" d="M10.5 11c.4-3.8 3.4-6 7-5.6 3.7.4 5.8 3.2 4.9 6.4-.9 3.1-4.7 4-5.6 7.3-.3 1-.3 2-.2 2.9"/><circle cx="16.8" cy="26.4" r="1.6"/>',
+    due: '<path pathLength="1" d="M18 5.2c-7.6-.8-12.9 4.2-12.7 10.9.2 6.5 5.6 10.8 11.9 10.5 6.5-.3 10.8-5 10.4-11.2-.4-6-5.2-10-12-8.8"/>',
+    fee: '<path pathLength="1" d="M5 18.5c2.2-3.2 4.2-3.4 5.9-.2 1.7 3.2 3.6 3 5.4-.2 1.8-3.2 3.8-3.2 5.5 0 1.2 2.2 2.6 2.6 4.4.7"/>',
+  };
+  const mark = (g, i) => `<svg class="mark m-${g}" viewBox="0 0 32 32" aria-hidden="true"${i == null ? "" : ` style="--i:${i}"`}>${MARKS[g]}</svg>`;
+  // Invoice number the way it gets scribbled in the margin: 00003-00001021 → 3-1021.
+  const shortNum = (c) => c.numero.replace(/^0+(?=\d)/, "").replace(/-0+(?=\d)/, "-");
+  const STATUS_LABEL = { ok: "Conciliado", grupo: "Pago agrupado", ret: "Con retención", monto: "Por monto y fecha", pend: { ventas: "Sin cobro", compras: "Sin pago" }, sincomp: "Sin comprobante", nc: "Nota de crédito", gasto: "Gasto bancario" };
+  const label = (k, mode) => typeof STATUS_LABEL[k] === "string" ? STATUS_LABEL[k] : STATUS_LABEL[k][mode];
+
+  // One plain sentence per result: what happened, how, and what to do.
+  function describe(r, mode) {
+    const v = mode === "ventas";
+    const c = r.comps[0], m = r.movs[0];
+    const who = c ? esc(nice(c.name) || fcuit(c.cuit)) : "";
+    const doc = c ? `${shortTipo(c)} ${esc(c.numero)}` : "";
+    const fc = (x) => `<span>fc ${esc(shortNum(x))}</span>`;
+    const said = (m) => `“${esc(m.desc)}”`;
+    switch (r.status) {
+      case "ok": return { what: v ? `${who} pagó la ${doc}` : `Se le pagó a ${who} la ${doc}`, how: `${v ? "Entró" : "Salió"} por banco: ${said(m)}`, note: fc(c), amt: m.abs };
+      case "grupo": return { what: v ? `${who} pagó ${r.comps.length} facturas juntas` : `Se le pagaron ${r.comps.length} facturas juntas a ${who}`, how: `${r.comps.map((x) => `${esc(x.numero)} (${fmt(x.total)})`).join(" + ")}, en ${v ? "un solo cobro" : "un solo pago"}`, note: r.comps.map(fc).join(" + "), amt: m.abs };
+      case "ret": {
+        const pct = (r.diff / c.total * 100).toFixed(1).replace(".", ",");
+        return { what: v ? `${who} pagó ${fmt(m.abs)} de una factura de ${fmt(c.total)}` : `A ${who} se le pagó ${fmt(m.abs)} de una factura de ${fmt(c.total)}`, how: `${v ? "Le retuvieron" : "Se le retuvo"} ${fmt(r.diff)} (${pct}%) de la ${doc}`, todo: v ? "Pedile el certificado de retención" : "Mandale el certificado de retención", note: `ret. ${pct}%`, amt: m.abs };
+      }
+      case "monto": return { what: v ? `Entró un cobro que coincide con la ${doc} de ${who}` : `Salió un pago que coincide con la ${doc} de ${who}`, how: `${said(m)}. El banco no dice ${v ? "quién pagó" : "a quién"}.`, todo: "Confirmalo con el cliente", note: `<span>¿fc ${esc(shortNum(c))}?</span>`, amt: m.abs };
+      case "nc": return { what: `Nota de crédito ${v ? "a" : "de"} ${who}`, how: `${esc(c.numero)}, emitida el ${fday(c.fecha)}`, todo: "Revisá qué factura anula", note: "NC ¿de cuál?", amt: -c.total };
+      case "pend": return { what: v ? `${who} todavía no pagó la ${doc}` : `Todavía no se le pagó a ${who} la ${doc}`, how: "No aparece en el extracto", todo: v ? "Pasa a cuentas por cobrar" : "Pasa a cuentas por pagar", note: v ? "a cobrar" : "a pagar", amt: c.total };
+      case "sincomp": return { what: v ? `Entraron ${fmt(m.abs)} sin factura` : `Salieron ${fmt(m.abs)} sin factura`, how: said(m), todo: v ? "Preguntale al cliente qué es" : "Preguntale al cliente qué fue", note: "¿qué es?", amt: m.abs };
+      case "gasto": return { what: esc(nice(m.desc)), how: "Va a gastos e impuestos bancarios", note: "gastos banc.", amt: m.abs };
+    }
+  }
+
+  // What the accountant can do with each kind of result. A choice is kept as a decision on that row.
+  const CHOICES = {
+    monto: (v) => [
+      { to: "ok", label: "Sí, es esa factura", note: "confirmado", why: "Lo confirmaste vos." },
+      { to: "due", label: "No es esa", note: "no corresponde", why: v ? "Separado: la factura sigue a cobrar y el cobro queda sin factura." : "Separado: la factura sigue a pagar y el pago queda sin factura." },
+    ],
+    ret: (v) => [{ to: "ok", label: v ? "Ya llegó el certificado" : "Ya se mandó el certificado", note: "cert. ok", why: v ? "Certificado de retención recibido." : "Certificado de retención enviado." }],
+    nc: () => [{ to: "ok", label: "Ya la imputé", note: "NC imputada", why: "Nota de crédito imputada a su factura." }],
+    pend: (v) => [{ to: "ok", label: v ? "Lo cobró por otro medio" : "Se pagó por otro medio", note: v ? "cobrado aparte" : "pagado aparte", why: v ? "Cobrado en efectivo o en otra cuenta." : "Pagado en efectivo o desde otra cuenta." }],
+    sincomp: (v) => (v
+      ? [["Aporte de los dueños o socios", "aporte"], ["Préstamo recibido", "préstamo"], ["Transferencia entre cuentas propias", "entre ctas. propias"], ["Cobro de una factura de otro mes", "fc otro mes"], ["Venta sin factura: hay que facturarla", "a facturar", "due"]]
+      : [["Retiro de los dueños o socios", "retiro"], ["Cuota de un préstamo", "préstamo"], ["Transferencia entre cuentas propias", "entre ctas. propias"], ["Pago de una factura de otro mes", "fc otro mes"], ["Gasto sin factura: hay que pedirla", "pedir factura", "due"]]
+    ).map(([lab, note, to = "ok"]) => ({ to, label: lab, note, why: lab + "." })),
+  };
+
+  // Bank charges as they go into the month's entry.
+  const FEE_KINDS = [
+    [/ley 25\.?413|imp\.? ?(deb|cred)|impuesto (a los )?(deb|cred)/, "Impuesto a los débitos y créditos", "Una parte se computa como pago a cuenta de Ganancias."],
+    [/sircreb|percep/, "Percepciones de Ingresos Brutos", "Pago a cuenta de Ingresos Brutos."],
+    [/\biva\b/, "IVA crédito fiscal", ""],
+    [/\bvep\b|monotributo|\barca\b|\bafip\b/, "Impuestos pagados por débito", ""],
+    [/comision|mantenimiento|paquete|cargo/, "Comisiones y gastos bancarios", ""],
+    [/./, "Otros cargos del banco", ""],
+  ];
+
+  const SAMPLES = [
+    { id: "delvalle", name: "Del Valle Insumos SRL", kind: "Distribuidora, responsable inscripta", period: "Septiembre 2026", emit: EMIT, reci: RECI, bank: BANK, saldo: 2500000 },
+    { id: "ferrero", name: "Lucía Ferrero", kind: "Kinesióloga, monotributista", period: "Septiembre 2026", emit: EMIT_F, reci: RECI_F, bank: BANK_F, saldo: 410000 },
+    { id: "talas", name: "Agro Los Talas SA", kind: "Productor agropecuario, responsable inscripto", period: "Septiembre 2026", emit: EMIT_T, reci: RECI_T, bank: BANK_T, saldo: 9000000 },
+  ];
+  const sampleFiles = (s) => ({ emitidos: compsCsv(HEAD_EMIT, s.emit), recibidos: compsCsv(HEAD_RECI, s.reci), extracto: bankCsv(s.bank, s.saldo) });
+  function sampleClient(s) {
+    const f = sampleFiles(s);
+    return {
+      id: s.id, name: s.name, kind: s.kind, period: s.period, sample: true, decisions: {},
+      data: { ventas: readComprobantes(parseDelimited(f.emitidos)).comps, compras: readComprobantes(parseDelimited(f.recibidos)).comps, banco: readBank(parseDelimited(f.extracto)) },
+    };
+  }
+
+  const state = { clients: [], current: 0, dir: "all", filter: "all", fresh: null, view: null };
+  const $ = (id) => document.getElementById(id);
+  const client = () => state.clients[state.current];
+
+  // Reconcile both sides of one statement: credits against Emitidos, debits against Recibidos.
+  function analyze(cl) {
+    const w = +$("window").value;
+    const rows = [];
+    ["ventas", "compras"].forEach((dir) => reconcile(cl.data[dir] || [], cl.data.banco || [], dir, w).rows.forEach((r) => {
+      const key = `${dir}:${r.comps.map((c) => c.id).join("+")}|${r.movs.map((m) => m.id).join("+")}`;
+      const dec = cl.decisions[key];
+      rows.push({ ...r, dir, key, dec, g: dec ? dec.to : GROUP_OF[r.status] });
+    }));
+    const when = (r) => (r.movs[0] || r.comps[0]).fecha;
+    rows.sort((a, b) => when(a) - when(b) || (a.dir === b.dir ? 0 : a.dir === "ventas" ? -1 : 1));
+    const banco = cl.data.banco || [];
+    const hasComps = (cl.data.ventas || []).length + (cl.data.compras || []).length > 0;
+    const open = (r) => !r.dec && (GROUP_OF[r.status] === "look" || r.status === "sincomp");
+    return {
+      rows, when, banco, hasComps,
+      ready: hasComps && banco.length > 0,
+      auto: rows.filter((r) => r.status === "ok" || r.status === "grupo").length,
+      fees: rows.filter((r) => r.status === "gasto").length,
+      toResolve: rows.filter(open).length,
+      open,
+      ticked: rows.filter((r) => r.movs.length && (r.g === "ok" || r.g === "fee")).reduce((n, r) => n + r.movs.length, 0),
+    };
+  }
+
+  function balances(banco) {
+    const credits = banco.filter((m) => m.amt > 0).reduce((s, m) => s + m.amt, 0);
+    const debits = banco.filter((m) => m.amt < 0).reduce((s, m) => s - m.amt, 0);
+    const withSaldo = banco.filter((m) => !isNaN(m.saldo));
+    if (withSaldo.length !== banco.length || !banco.length) return { credits, debits };
+    // Banks export oldest-first or newest-first; read the opening balance off the oldest line.
+    const asc = banco[0].fecha <= banco[banco.length - 1].fecha;
+    const first = asc ? banco[0] : banco[banco.length - 1], last = asc ? banco[banco.length - 1] : banco[0];
+    const opening = first.saldo - first.amt, closing = last.saldo;
+    return { credits, debits, opening, closing, closes: Math.abs(opening + credits - debits - closing) < 1 };
+  }
+
+  function feeLines(rows) {
+    const out = new Map();
+    rows.filter((r) => r.status === "gasto").forEach((r) => {
+      const m = r.movs[0];
+      const [, name, hint] = FEE_KINDS.find(([re]) => re.test(m.dnorm));
+      const line = out.get(name) || { name, hint, total: 0, movs: [] };
+      line.total -= m.amt; line.movs.push(m);
+      out.set(name, line);
+    });
+    return [...out.values()];
+  }
+
+  // Plain-text questions for the client, from what is still open.
+  function asks(a) {
+    return a.rows.filter(a.open).filter((r) => r.status !== "nc").map((r) => {
+      const v = r.dir === "ventas", c = r.comps[0], m = r.movs[0];
+      const who = c ? nice(c.name) : "";
+      if (r.status === "ret") return v
+        ? `El certificado de retención de ${who}: te retuvieron ${fmt(r.diff)} en la factura ${c.numero}.`
+        : `El certificado de la retención que le hiciste a ${who} (${fmt(r.diff)}, factura ${c.numero}). ¿Se lo mandaste?`;
+      if (r.status === "monto") return `${v ? "El cobro" : "El pago"} de ${fmt(m.abs)} del ${fday(m.fecha)} ("${m.desc}"), ¿es la factura ${c.numero} de ${who}?`;
+      return `${v ? "¿Qué es el cobro" : "¿Qué fue el pago"} de ${fmt(m.abs)} del ${fday(m.fecha)}? En el banco figura como "${m.desc}".`;
+    });
+  }
+
+  function setMsg(text, kind = "") { const el = $("msg"); el.textContent = text; el.className = "msg" + (kind ? " " + kind : ""); }
+
+  function renderTabs() {
+    $("tabs").innerHTML = state.clients.map((cl, i) => {
+      const a = analyze(cl);
+      const status = !a.ready ? "faltan archivos" : a.toResolve ? `${a.ticked} de ${a.banco.length} tildados` : "conciliado";
+      return `<button type="button" role="tab" id="tab-${i}" aria-controls="sheet" aria-selected="${i === state.current}" tabindex="${i === state.current ? 0 : -1}" data-i="${i}"><b>${esc(cl.name)}</b><small class="${a.ready && !a.toResolve ? "closed" : ""}">${status}</small></button>`;
+    }).join("");
+    $("sheet").setAttribute("aria-labelledby", `tab-${state.current}`);
+  }
+
+  function render(draw = false) {
+    const cl = client();
+    const a = analyze(cl);
+    state.view = a;
+    renderTabs();
+
+    $("who").textContent = cl.name;
+    const month = a.banco.length ? a.banco[0].fecha.toLocaleDateString("es-AR", { month: "long", year: "numeric" }) : "";
+    $("period").textContent = cl.sample ? `${cl.period}. ${cl.kind}.` : `${month ? month.charAt(0).toUpperCase() + month.slice(1) + ". " : ""}Leído en tu navegador.`;
+    $("stamp").textContent = cl.sample ? "cliente de ejemplo" : "tus archivos";
+    $("stamp").className = "tag" + (cl.sample ? "" : " mine");
+    $("closed").hidden = !(a.ready && !a.toResolve);
+    ["all", "ventas", "compras"].forEach((d) => $("dir-" + d).setAttribute("aria-pressed", state.dir === d));
+
+    $("headline").innerHTML = !a.ready
+      ? (a.hasComps ? "Falta el extracto del banco para conciliar." : a.banco.length ? "Falta Mis Comprobantes (emitidos, recibidos o los dos) para conciliar." : "Subí los archivos abajo para ver la conciliación.")
+      : `De <b>${a.banco.length}</b> movimientos del extracto, <b>${a.auto}</b> se tildaron solos contra su factura y <b>${a.fees}</b> son gastos del banco. ${a.toResolve ? `Te ${a.toResolve === 1 ? "queda <b>una</b> cosa" : `quedan <b>${a.toResolve}</b> cosas`} por resolver.` : "No queda nada por resolver."}`;
+
+    const byDir = state.dir === "all" ? a.rows : a.rows.filter((r) => r.dir === state.dir);
+    $("groups").innerHTML = ["ok", "look", "due", "fee"].map((g) => {
+      const n = byDir.filter((r) => r.g === g).length;
+      return `<button type="button" class="${g}" data-g="${g}" aria-pressed="${state.filter === g}">${mark(g)}<b><span class="n num">${n}</span>${GROUPS[g].t}</b><small>${GROUPS[g].d}</small></button>`;
+    }).join("");
+
+    const shown = state.filter === "all" ? byDir : byDir.filter((r) => r.g === state.filter);
+    $("list-title").textContent = state.filter === "all" ? ({ all: "Todo el mes", ventas: "Cobros del mes", compras: "Pagos del mes" })[state.dir] : GROUPS[state.filter].t;
+    $("show-all").hidden = state.filter === "all";
+    $("items").innerHTML = shown.length ? shown.map((r, i) => {
+      const d = describe(r, r.dir);
+      const inBank = r.movs.length > 0;
+      const amount = d.amt < 0 ? "−" + fmt(-d.amt) : (inBank ? (r.dir === "ventas" ? "+" : "−") : "") + fmt(d.amt);
+      let act = "";
+      if (r.dec) act = `<div class="done">${esc(r.dec.why)} <button type="button" class="undo" data-undo>Deshacer</button></div>`;
+      else if (CHOICES[r.status]) {
+        const opts = CHOICES[r.status](r.dir === "ventas");
+        act = r.status === "sincomp"
+          ? `<div class="acts"><label><span class="sr">Clasificar este movimiento</span><select data-pick><option value="">Clasificar…</option>${opts.map((o, k) => `<option value="${k}">${esc(o.label)}</option>`).join("")}</select></label></div>`
+          : `<div class="acts">${opts.map((o, k) => `<button type="button" class="${k === 0 ? "primary" : ""}" data-act="${k}">${esc(o.label)}</button>`).join("")}</div>`;
+      }
+      return `<li class="row ${r.g}${r.key === state.fresh ? " fresh" : ""}" data-key="${esc(r.key)}" tabindex="-1">
+        <span class="date num">${fday(a.when(r))}</span>
+        ${mark(r.g, i)}
+        <div class="main"><div class="what">${d.what}</div><div class="how">${d.how}</div>${!r.dec && d.todo ? `<div class="todo">${d.todo}</div>` : ""}${act}</div>
+        <div class="amt num${inBank ? "" : " inv"}">${amount}<small>${inBank ? esc(label(r.status, r.dir)) : "Facturado, " + esc(label(r.status, r.dir)).toLowerCase()}</small></div>
+        <span class="note">${r.dec ? esc(r.dec.note) : d.note || ""}</span>
+      </li>`;
+    }).join("") : `<li class="empty">${a.ready ? "No hay nada en este grupo." : "Cuando estén los dos archivos, acá aparece el extracto tildado."}</li>`;
+
+    renderClose(a);
+
+    // Ticks are drawn down the statement when a new month lands; a single tick when one row is resolved.
+    const sheet = $("sheet");
+    sheet.classList.remove("drawing");
+    if (draw) { void sheet.offsetWidth; sheet.classList.add("drawing"); }
+    if (state.fresh) {
+      const row = $("items").querySelector(`[data-key="${CSS.escape(state.fresh)}"]`);
+      if (row) row.focus({ preventScroll: true });
+      state.fresh = null;
+    }
+  }
+
+  function renderClose(a) {
+    const b = balances(a.banco);
+    const fees = feeLines(a.rows);
+    const q = asks(a);
+    const feeTotal = fees.reduce((s, l) => s + l.total, 0);
+    $("close").hidden = !a.ready;
+    if (!a.ready) return;
+    $("close-saldo").innerHTML = `<h3>Saldo del banco</h3>
+      <dl class="ledger num">
+        ${b.opening != null ? `<dt>Saldo inicial</dt><dd>${fmt(b.opening)}</dd>` : ""}
+        <dt>Cobros y créditos</dt><dd>+${fmt(b.credits)}</dd>
+        <dt>Pagos, gastos e impuestos</dt><dd>−${fmt(b.debits)}</dd>
+        ${b.opening != null ? `<dt class="tot">Saldo final</dt><dd class="tot">${fmt(b.opening + b.credits - b.debits)}</dd>` : ""}
+      </dl>
+      <p class="check ${b.closes ? "ok" : b.opening != null ? "bad" : ""}">${b.closes ? `${mark("ok")}<span>Coincide con el saldo final del extracto.</span>` : b.opening != null ? `No coincide con el saldo final del extracto (${fmt(b.closing)}). Revisá que el archivo tenga todo el mes.` : "El extracto no trae la columna de saldo, así que no pude controlar el saldo final."}</p>`;
+    $("close-fees").innerHTML = `<h3>Asiento de gastos del banco</h3>
+      ${fees.length ? `<dl class="ledger num">${fees.map((l) => `<dt>${esc(l.name)}${l.hint ? `<small>${esc(l.hint)}</small>` : ""}</dt><dd>${fmt(l.total)}</dd>`).join("")}<dt class="tot">Total contra el banco</dt><dd class="tot">${fmt(feeTotal)}</dd></dl>` : `<p class="quiet">Este mes el banco no cobró gastos ni impuestos.</p>`}`;
+    $("close-asks").innerHTML = `<h3>Para pedirle al cliente</h3>
+      ${q.length ? `<ol class="asks">${q.slice(0, 3).map((t) => `<li>${esc(t)}</li>`).join("")}</ol>${q.length > 3 ? `<p class="quiet">Y ${q.length - 3} más en el mensaje.</p>` : ""}` : `<p class="quiet">No hay nada que preguntarle. Lo que quedó pendiente es para cuentas por cobrar y por pagar.</p>`}`;
+    $("compose").disabled = !q.length;
+  }
+
+  // ---------- Exports ----------
+  function exportRows() {
+    const cl = client(), a = state.view;
+    const head = ["Lado", "Estado", "Fecha comprobante", "Comprobante", "Número", "Cliente o proveedor", "CUIT", "Facturado", "Fecha banco", "Movimiento", "En el banco", "Diferencia", "Qué hacer", "Resolución"];
+    const lines = [head];
+    a.rows.forEach((r) => {
+      const m = r.movs[0], todo = describe(r, r.dir).todo || "";
+      (r.comps.length ? r.comps : [null]).forEach((c) => lines.push([r.dir === "ventas" ? "Cobro" : "Pago", label(r.status, r.dir), c ? fdate(c.fecha) : "", c ? c.tipo : "", c ? c.numero : "", c ? c.name : "", c ? fcuit(c.cuit) : "",
+        c ? (c.isNC ? -c.total : c.total) : "", m ? fdate(m.fecha) : "", m ? m.desc : "", m ? m.amt : "", r.diff || "", r.dec ? "" : todo, r.dec ? r.dec.why : ""]));
+    });
+    return { cl, a, lines };
+  }
+  function tsv() {
+    const n = (x) => typeof x === "number" ? x.toFixed(2).replace(".", ",") : x;
+    return exportRows().lines.map((l) => l.map(n).join("\t")).join("\n");
+  }
+  function workbook() {
+    const { cl, a, lines } = exportRows();
+    const b = balances(a.banco), fees = feeLines(a.rows), q = asks(a);
+    const wb = XLSX.utils.book_new();
+    const add = (name, rows) => XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), name);
+    add("Conciliación", lines);
+    add("Saldos", [["Concepto", "Importe"], ...(b.opening != null ? [["Saldo inicial", b.opening]] : []), ["Cobros y créditos", b.credits], ["Pagos, gastos e impuestos", -b.debits],
+      ...(b.opening != null ? [["Saldo final", b.opening + b.credits - b.debits], ["Saldo final según el extracto", b.closing]] : [])]);
+    add("Gastos del banco", [["Cuenta", "Importe", "Nota"], ...fees.map((l) => [l.name, l.total, l.hint]), [], ["Fecha", "Movimiento", "Importe", "Cuenta"],
+      ...fees.flatMap((l) => l.movs.map((m) => [fdate(m.fecha), m.desc, -m.amt, l.name]))]);
+    add("Para el cliente", [["#", "Pregunta"], ...q.map((t, i) => [i + 1, t])]);
+    return { wb, name: `Conciliación ${cl.name} ${cl.sample ? cl.period : "del mes"}.xlsx` };
+  }
+
+  // Inside claude.ai a file goes through the viewer's save prompt; anywhere else, a plain download.
+  async function saveFile(filename, data) {
+    const dl = window.claude && typeof window.claude.use === "function" ? await window.claude.use("downloads").catch(() => null) : null;
+    if (dl) {
+      try { await dl.save({ filename, data }); return; }
+      catch (err) {
+        if (err && err.code === "declined") return;
+        if (err && !["unavailable", "not_granted", "capability_disabled", "capability_removed"].includes(err.code)) { setMsg("No se pudo guardar el archivo: " + (err.message || err.code), "err"); return; }
+      }
+    }
+    const url = URL.createObjectURL(data instanceof Blob ? data : new Blob([data]));
+    const link = Object.assign(document.createElement("a"), { href: url, download: filename });
+    document.body.appendChild(link); link.click(); link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+  }
+
+  function message() {
+    const cl = client(), q = asks(state.view);
+    const month = cl.sample ? cl.period.toLowerCase() : "el mes";
+    return `¡Hola! Estamos cerrando ${month} de ${cl.name}. Para terminar la conciliación del banco nos faltan estas cosas:\n\n${q.map((t, i) => `${i + 1}. ${t}`).join("\n")}\n\nCon esto cerramos el mes. ¡Gracias!`;
+  }
+  function syncWhatsapp() { $("wa").href = "https://wa.me/?text=" + encodeURIComponent($("msg-text").value); }
+
+  // ---------- Events ----------
+  function decide(key, choice) {
+    const cl = client();
+    if (choice) cl.decisions[key] = { to: choice.to, note: choice.note, why: choice.why };
+    else delete cl.decisions[key];
+    state.fresh = key;
+    render();
+  }
+  $("items").addEventListener("click", (e) => {
+    const row = e.target.closest(".row[data-key]");
+    if (!row) return;
+    const r = state.view.rows.find((x) => x.key === row.dataset.key);
+    const b = e.target.closest("button");
+    if (!r || !b) return;
+    if (b.hasAttribute("data-undo")) decide(r.key, null);
+    else if (b.dataset.act != null) decide(r.key, CHOICES[r.status](r.dir === "ventas")[+b.dataset.act]);
+  });
+  $("items").addEventListener("change", (e) => {
+    const sel = e.target.closest("select[data-pick]");
+    const row = e.target.closest(".row[data-key]");
+    if (!sel || !row || sel.value === "") return;
+    const r = state.view.rows.find((x) => x.key === row.dataset.key);
+    if (r) decide(r.key, CHOICES.sincomp(r.dir === "ventas")[+sel.value]);
+  });
+  function selectClient(i, focus) {
+    if (i === state.current) return;
+    state.current = i; state.filter = "all"; render(true);
+    if (focus) $("tab-" + i).focus();
+  }
+  $("tabs").addEventListener("click", (e) => { const b = e.target.closest("button[data-i]"); if (b) selectClient(+b.dataset.i); });
+  $("tabs").addEventListener("keydown", (e) => {
+    const n = state.clients.length;
+    const i = e.key === "ArrowRight" ? (state.current + 1) % n : e.key === "ArrowLeft" ? (state.current - 1 + n) % n : e.key === "Home" ? 0 : e.key === "End" ? n - 1 : null;
+    if (i != null) { e.preventDefault(); selectClient(i, true); }
+  });
+  ["all", "ventas", "compras"].forEach((d) => $("dir-" + d).addEventListener("click", () => { state.dir = d; state.filter = "all"; render(); }));
+  $("window").addEventListener("change", () => render(true));
+  $("groups").addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-g]");
+    if (!b) return;
+    state.filter = state.filter === b.dataset.g ? "all" : b.dataset.g; render();
+  });
+  $("show-all").addEventListener("click", () => { state.filter = "all"; render(); });
+  $("copy").addEventListener("click", (e) => {
+    const b = e.currentTarget;
+    const done = () => { b.textContent = "Copiado. Pegalo en Excel"; setTimeout(() => (b.textContent = "Copiar para Excel"), 2500); };
+    if (!navigator.clipboard) { setMsg("Tu navegador no dejó copiar.", "err"); return; }
+    navigator.clipboard.writeText(tsv()).then(done, () => setMsg("Tu navegador no dejó copiar.", "err"));
+  });
+  $("xlsx").addEventListener("click", () => {
+    if (typeof XLSX === "undefined") { setMsg("No se pudo cargar el armador de Excel. Usá «Copiar para Excel».", "err"); return; }
+    const { wb, name } = workbook();
+    saveFile(name, new Blob([XLSX.write(wb, { bookType: "xlsx", type: "array" })]));
+  });
+  $("compose").addEventListener("click", () => {
+    $("msg-text").value = message(); syncWhatsapp();
+    $("msg-dialog").showModal();
+  });
+  $("msg-text").addEventListener("input", syncWhatsapp);
+  $("msg-copy").addEventListener("click", (e) => {
+    const b = e.currentTarget;
+    if (!navigator.clipboard) return;
+    navigator.clipboard.writeText($("msg-text").value).then(() => { b.textContent = "Copiado"; setTimeout(() => (b.textContent = "Copiar mensaje"), 2000); });
+  });
+  $("msg-close").addEventListener("click", () => $("msg-dialog").close());
+
+  // ---------- Your own files ----------
+  function mine() {
+    let i = state.clients.findIndex((cl) => !cl.sample);
+    if (i < 0) {
+      state.clients.push({ id: "mine", name: "Tu cliente", sample: false, decisions: {}, data: { ventas: [], compras: [], banco: [] } });
+      i = state.clients.length - 1;
+    }
+    state.current = i;
+    $("reset").hidden = false;
+    return state.clients[i];
+  }
+  async function ingest(files) {
+    const read = [];
+    for (const file of files) {
+      try {
+        const rows = await fileRows(file);
+        const h = findHeader(rows);
+        const heads = h >= 0 ? rows[h].map(norm) : [];
+        const cl = mine();
+        if (heads.some((x) => /receptor|emisor|denominacion|punto de venta|tipo de comprobante/.test(x))) {
+          const { kind, comps } = readComprobantes(rows);
+          const k = kind || "ventas";
+          cl.data[k] = comps; cl.decisions = {};
+          read.push(`${comps.length} comprobantes ${k === "ventas" ? "emitidos" : "recibidos"}${kind ? "" : " (no dice si son emitidos o recibidos; los tomé como emitidos)"}`);
+        } else {
+          const movs = readBank(rows);
+          cl.data.banco = movs; cl.decisions = {};
+          read.push(`${movs.length} movimientos del banco`);
+        }
+      } catch (err) { setMsg(`“${file.name}”: ${err.message}`, "err"); if (state.clients.some((c) => !c.sample)) render(true); return; }
+    }
+    if (!read.length) return;
+    const cl = client();
+    const parts = [cl.data.ventas.length && `${cl.data.ventas.length} emitidos`, cl.data.compras.length && `${cl.data.compras.length} recibidos`].filter(Boolean);
+    $("done-comp").textContent = parts.join(" y "); $("done-comp").hidden = !parts.length;
+    $("done-bank").textContent = `${cl.data.banco.length} movimientos`; $("done-bank").hidden = !cl.data.banco.length;
+    const next = !cl.data.banco.length ? " Ahora subí el extracto del banco." : !(cl.data.ventas.length + cl.data.compras.length) ? " Ahora subí Mis Comprobantes." : " Mirá el resultado arriba, en la pestaña «Tu cliente».";
+    setMsg(`Listo: leí ${read.join(", ")}.${next}`, "okmsg");
+    state.dir = "all"; state.filter = "all";
+    render(true);
+  }
+  [["f-comp", "drop-comp"], ["f-bank", "drop-bank"]].forEach(([inp, zone]) => {
+    $(inp).addEventListener("change", (e) => { const fs = [...e.target.files]; e.target.value = ""; if (fs.length) ingest(fs); });
+    const z = $(zone);
+    z.addEventListener("dragover", (e) => { e.preventDefault(); z.classList.add("over"); });
+    z.addEventListener("dragleave", () => z.classList.remove("over"));
+    z.addEventListener("drop", (e) => { e.preventDefault(); z.classList.remove("over"); const fs = [...e.dataTransfer.files]; if (fs.length) ingest(fs); });
+  });
+  $("reset").addEventListener("click", () => {
+    state.clients = state.clients.filter((cl) => cl.sample); state.current = 0; state.dir = "all"; state.filter = "all";
+    $("reset").hidden = true; $("done-comp").hidden = true; $("done-bank").hidden = true;
+    setMsg(SAMPLE_MSG);
+    render(true);
+  });
+  $("samples").addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-file]");
+    if (!b) return;
+    const cl = client().sample ? client() : state.clients[0];
+    const s = SAMPLES.find((x) => x.id === cl.id);
+    const names = { emitidos: "Mis Comprobantes Emitidos", recibidos: "Mis Comprobantes Recibidos", extracto: "Extracto bancario" };
+    saveFile(`${names[b.dataset.file]} - ${s.name}.csv`, "﻿" + sampleFiles(s)[b.dataset.file]);
+  });
+
+  function calc() {
+    const cl = +$("c-clientes").value || 0, mi = +$("c-min").value || 0, ho = +$("c-hora").value || 0;
+    const horas = cl * mi / 60;
+    $("c-horas").textContent = `${horas.toLocaleString("es-AR", { maximumFractionDigits: 1 })} h`;
+    $("c-pesos").textContent = money0.format(horas * ho);
+  }
+  ["c-clientes", "c-min", "c-hora"].forEach((id) => $(id).addEventListener("input", calc));
+
+  const SAMPLE_MSG = "Arriba ves tres clientes de ejemplo inventados. Cambiá de pestaña para verlos, o bajá sus archivos y subilos para probar.";
+  window.__conciliar = { parseDelimited, parseAmount, parseDate, readComprobantes, readBank, reconcile, analyze, balances, feeLines, asks, compsCsv, bankCsv, HEAD_EMIT, HEAD_RECI, EMIT, RECI, SAMPLES, sampleClient };
+  state.clients = SAMPLES.map(sampleClient);
+  setMsg(SAMPLE_MSG);
+  render(true); calc();
+})();
+</script>

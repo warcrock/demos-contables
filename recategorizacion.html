@@ -1,0 +1,772 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Recategorización a tiempo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;800&family=Public+Sans:wght@400;500;600;700&family=Kalam:wght@400;700&display=swap">
+<style>
+/* Layout: same family as the reconciliation demo (paper on a desk, pen marks, margin notes). Here the paper is the studio's list of monotributistas; each one gets a ruler with the category caps A–K marked on it and the year's billing drawn against it, so who changes category reads at a glance. */
+:root {
+  --desk: #e4e9e7;
+  --paper: #ffffff;
+  --band: #eef3f0;
+  --ink: #1c2320;
+  --muted: #5a6560;
+  --line: #cfd8d3;
+  --pen: #2346a8;      /* birome azul: lo que ya se facturó, acción */
+  --pen-soft: #9fb1e3; /* lo estimado hasta el cierre */
+  --pen-ink: #ffffff;
+  --red: #c2362b;      /* sube de categoría o queda afuera */
+  --hl: #fcf09c;       /* resaltador: cerca del tope */
+  --hl-ink: #7a6200;
+  --pencil: #737b80;   /* sin cambios */
+  --display: "Schibsted Grotesk", "Segoe UI", system-ui, sans-serif;
+  --body: "Public Sans", "Segoe UI", system-ui, sans-serif;
+  --hand: "Kalam", "Segoe Print", "Comic Sans MS", cursive;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --desk: #0f1312; --paper: #181e1c; --band: #1d2522; --ink: #e5ebe8; --muted: #9ca8a2; --line: #2c3632;
+    --pen: #93abff; --pen-soft: #3d4f86; --pen-ink: #0c1430; --red: #ff8b7d; --hl: rgba(250, 222, 90, 0.2); --hl-ink: #f3d76a; --pencil: #a2aaae;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --desk: #0f1312; --paper: #181e1c; --band: #1d2522; --ink: #e5ebe8; --muted: #9ca8a2; --line: #2c3632;
+  --pen: #93abff; --pen-soft: #3d4f86; --pen-ink: #0c1430; --red: #ff8b7d; --hl: rgba(250, 222, 90, 0.2); --hl-ink: #f3d76a; --pencil: #a2aaae;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--desk); color: var(--ink); font: 400 1rem/1.6 var(--body); }
+.wrap { max-width: 1080px; margin: 0 auto; padding: 32px 20px 96px; display: grid; gap: 64px; }
+h1, h2, h3 { font-family: var(--display); font-weight: 800; line-height: 1.08; text-wrap: balance; margin: 0; letter-spacing: -0.015em; }
+p { margin: 0; }
+:focus-visible { outline: 3px solid var(--pen); outline-offset: 2px; border-radius: 4px; }
+.num { font-variant-numeric: tabular-nums; }
+button, select { font: inherit; color: inherit; }
+
+/* Pitch */
+.hero { display: grid; gap: 18px; max-width: 780px; }
+.brand { font: 600 0.95rem var(--display); color: var(--muted); }
+.brand b { color: var(--ink); }
+.hero h1 { font-size: clamp(2.1rem, 5.4vw, 3.6rem); }
+.hero p { font-size: 1.15rem; color: var(--muted); max-width: 38em; }
+
+/* The list */
+.sheet { position: relative; background: var(--paper); padding: 0 32px; box-shadow: 0 1px 0 var(--line), 0 18px 40px -28px rgba(20, 30, 25, 0.45); }
+.sheet-head { display: grid; gap: 8px; padding: 26px 8px 20px; border-bottom: 2px solid var(--ink); }
+.sheet-head strong { font: 800 1.35rem/1.2 var(--display); }
+.sheet-head .sub { color: var(--muted); font-size: 0.95rem; }
+.tag { justify-self: start; font: 400 1rem/1 var(--hand); color: var(--red); transform: rotate(-2deg); }
+.tag.mine { color: var(--pen); }
+#headline { margin-top: 6px; font: 600 clamp(1.15rem, 2.4vw, 1.45rem)/1.35 var(--display); max-width: 36em; }
+#headline b { color: var(--pen); }
+
+.key { display: flex; flex-wrap: wrap; gap: 4px 6px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.key button { display: inline-flex; align-items: baseline; gap: 8px; padding: 8px 14px; border: 0; border-bottom: 3px solid transparent; background: none; cursor: pointer; }
+.key button:hover { background: var(--band); }
+.key button[aria-pressed="true"] { border-bottom-color: currentColor; }
+.key b { font: 800 1.05rem/1.2 var(--display); }
+.key small { color: var(--muted); font-size: 0.85rem; }
+.key .dot { width: 10px; height: 10px; border-radius: 50%; align-self: center; flex: none; }
+
+.s-excl, .s-sube { --st: var(--red); }
+.s-cerca { --st: var(--hl-ink); }
+.s-baja { --st: var(--pen); }
+.s-bien, .s-sin { --st: var(--pencil); }
+.dot { background: var(--st); }
+.s-cerca .dot { background: var(--hl); box-shadow: inset 0 0 0 2px var(--hl-ink); }
+
+.cols, .row { display: grid; grid-template-columns: minmax(150px, 1.1fr) minmax(0, 1.6fr) minmax(0, 1.3fr) 110px; column-gap: 20px; padding-inline: 8px; }
+.cols { padding-block: 10px 6px; font-size: 0.82rem; font-weight: 600; color: var(--muted); }
+.rows { list-style: none; margin: 0; padding: 0 0 8px; }
+.rows > li { border-bottom: 1px solid var(--line); }
+.row { align-items: center; padding-block: 14px; width: 100%; border: 0; background: none; text-align: left; cursor: pointer; }
+.row:hover { background: var(--band); }
+.rows > li.open .row { background: var(--band); }
+.row.s-cerca { background-image: linear-gradient(var(--hl), var(--hl)); background-size: 6px 100%; background-repeat: no-repeat; }
+.row.s-excl, .row.s-sube { box-shadow: inset 4px 0 0 var(--red); }
+.row .name { display: grid; gap: 2px; min-width: 0; }
+.row .name b { font-weight: 700; overflow-wrap: anywhere; }
+.row .name small { color: var(--muted); font-size: 0.86rem; }
+.chip { display: inline-block; min-width: 1.7em; padding: 0 6px; border: 1.5px solid currentColor; border-radius: 5px; font: 800 0.82rem/1.45 var(--display); text-align: center; }
+.row .what { display: grid; gap: 2px; min-width: 0; }
+.row .what b { color: var(--st); font-weight: 700; }
+.row.s-cerca .what b { color: var(--ink); }
+.row .what small { color: var(--muted); font-size: 0.86rem; }
+.row .note { font: 400 1.1rem/1.2 var(--hand); color: var(--st); transform: rotate(-2deg); transform-origin: left center; }
+.row.s-cerca .note { color: var(--hl-ink); }
+
+/* The ruler: billing against the category caps */
+.ruler { position: relative; height: 46px; min-width: 0; }
+.ruler .track { position: absolute; left: 0; right: 0; top: 10px; height: 12px; background: var(--band); border-radius: 3px; }
+.rows > li.open .ruler .track, .row:hover .ruler .track { background: var(--paper); }
+.ruler .known, .ruler .proj { position: absolute; top: 10px; height: 12px; }
+.ruler .known { left: 0; background: var(--pen); border-radius: 3px 0 0 3px; }
+.ruler .proj { background: repeating-linear-gradient(135deg, var(--pen-soft) 0 3px, transparent 3px 6px); border: 1.5px solid var(--pen-soft); border-left: 0; border-radius: 0 3px 3px 0; }
+.ruler .tick { position: absolute; top: 4px; width: 0; height: 24px; border-left: 1px solid var(--muted); }
+.ruler .tick span { position: absolute; top: 25px; transform: translateX(-50%); font: 600 0.72rem/1 var(--display); color: var(--muted); }
+.ruler .tick.cur { border-left: 2px solid var(--ink); top: 0; height: 30px; }
+.ruler .tick.cur span { top: 31px; color: var(--ink); font-weight: 800; font-size: 0.8rem; }
+.ruler .tick.over { border-left-color: var(--red); }
+.ruler .tick.over span { color: var(--red); }
+
+/* Detail for one monotributista */
+.detail { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 20px 32px; padding: 6px 8px 24px; background: var(--band); }
+.detail h3 { font-size: 1.05rem; margin-bottom: 8px; }
+.chart svg { display: block; width: 100%; height: auto; overflow: visible; }
+.chart .bar { fill: var(--pen); }
+.chart .bar.est { fill: url(#hatch); stroke: var(--pen-soft); stroke-width: 1.5; }
+.chart .hatch-line { stroke: var(--pen-soft); stroke-width: 3; }
+.chart .grid { stroke: var(--line); stroke-width: 1; }
+.chart .capline { stroke: var(--ink); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.chart text { fill: var(--muted); font: 500 12px var(--body); }
+.chart .hit { fill: transparent; }
+.chart .hit:hover + .bar, .chart .bar:hover { opacity: 0.8; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 18px; margin-top: 6px; font-size: 0.85rem; color: var(--muted); }
+.legend i { display: inline-block; width: 14px; height: 10px; margin-right: 6px; vertical-align: middle; border-radius: 2px; }
+.legend .k { background: var(--pen); }
+.legend .c { height: 0; border-top: 2px dashed var(--ink); border-radius: 0; }
+.legend .e { background: repeating-linear-gradient(135deg, var(--pen-soft) 0 3px, transparent 3px 6px); border: 1.5px solid var(--pen-soft); }
+.ledger { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 5px 14px; margin: 12px 0 0; font-size: 0.93rem; }
+.ledger dt { color: var(--muted); }
+.ledger dd { margin: 0; text-align: right; font-weight: 600; white-space: nowrap; }
+.ledger .tot { border-top: 1.5px solid var(--ink); padding-top: 5px; color: var(--ink); font-weight: 800; }
+.side { display: grid; gap: 12px; align-content: start; min-width: 0; }
+.pick { display: flex; flex-wrap: wrap; gap: 10px 16px; font-size: 0.92rem; color: var(--muted); }
+.pick label { display: grid; gap: 4px; }
+.pick select { padding: 6px 10px; border-radius: 6px; border: 1.5px solid var(--line); background: var(--paper); color: var(--ink); }
+.side textarea { width: 100%; min-height: 168px; padding: 12px; border: 1.5px solid var(--line); border-radius: 6px; background: var(--paper); color: var(--ink); font: 400 0.93rem/1.5 var(--body); resize: vertical; }
+.side .acts { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
+.quiet { color: var(--muted); font-size: 0.92rem; }
+
+.sheet-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; padding: 14px 8px 22px; border-top: 2px solid var(--ink); }
+.sheet-foot p { color: var(--muted); font-size: 0.92rem; flex: 1 1 260px; }
+.btn { padding: 10px 18px; border-radius: 6px; border: 1.5px solid var(--pen); background: var(--pen); color: var(--pen-ink); font-weight: 600; cursor: pointer; text-decoration: none; display: inline-block; }
+.btn:hover { filter: brightness(1.08); }
+.btn.ghost { background: var(--paper); color: var(--pen); }
+.link { padding: 6px 2px; border: 0; background: none; color: var(--pen); font-weight: 600; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+.empty { padding: 40px 16px; color: var(--muted); text-align: center; }
+
+/* Try it */
+.try { display: grid; gap: 18px; }
+.try h2, .below h2 { font-size: clamp(1.55rem, 3.2vw, 2.1rem); }
+.try > p, .below > p { color: var(--muted); max-width: 62ch; }
+.drop { position: relative; display: grid; gap: 2px; padding: 22px 24px; border: 2px dashed var(--line); border-radius: 8px; background: var(--paper); cursor: pointer; }
+.drop:hover, .drop.over { border-color: var(--pen); }
+.drop:focus-within { outline: 3px solid var(--pen); outline-offset: 2px; }
+.drop input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.drop strong { font: 800 1.12rem var(--display); }
+.drop span { color: var(--muted); font-size: 0.93rem; }
+.msg { padding: 12px 16px; border-left: 3px solid var(--line); background: var(--paper); color: var(--muted); font-size: 0.95rem; }
+.msg.err { color: var(--red); border-left-color: var(--red); }
+.msg.okmsg { color: var(--ink); border-left-color: var(--pen); }
+.safe { color: var(--muted); font-size: 0.93rem; }
+.safe b { color: var(--ink); }
+
+.below { display: grid; gap: 18px; }
+.scope { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px; }
+.scope > div { display: grid; gap: 8px; align-content: start; padding-top: 14px; border-top: 2px solid var(--ink); }
+.scope h3 { font-size: 1.08rem; }
+.scope ul { margin: 0; padding-left: 20px; display: grid; gap: 6px; color: var(--muted); font-size: 0.95rem; }
+.scope small { color: var(--muted); font-size: 0.85rem; }
+
+.offer { background: var(--pen); color: var(--pen-ink); padding: 36px 32px; display: grid; gap: 12px; border-radius: 4px; }
+.offer h2 { font-size: clamp(1.6rem, 3.4vw, 2.3rem); }
+.offer p { max-width: 58ch; }
+.offer .price { font: 800 1.3rem var(--display); }
+
+@media (max-width: 860px) {
+  .cols { display: none; }
+  .row { grid-template-columns: minmax(0, 1fr) auto; row-gap: 8px; }
+  .row .name { grid-column: 1; grid-row: 1; }
+  .row .note { grid-column: 2; grid-row: 1; align-self: start; }
+  .row .ruler { grid-column: 1 / -1; grid-row: 2; }
+  .row .what { grid-column: 1 / -1; grid-row: 3; }
+  .detail { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 640px) {
+  .wrap { padding-inline: 16px; gap: 52px; }
+  .sheet { padding: 0 14px; margin-inline: -16px; }
+  .sheet-head { padding-inline: 2px; }
+  .key button { flex: 1 1 calc(50% - 6px); display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 8px; align-items: center; text-align: left; }
+  .key small { grid-column: 2; }
+  .scope { grid-template-columns: minmax(0, 1fr); }
+  .sheet-foot .btn { flex: 1 1 auto; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .ruler .known, .ruler .proj { transition: width 0.4s ease-out, left 0.4s ease-out; }
+}
+</style>
+
+<div class="wrap">
+  <header class="hero">
+    <p class="brand"><b>Planilla a Sistema</b>, para estudios contables</p>
+    <h1>Quién cambia de categoría, antes de que llegue la recategorización.</h1>
+    <p>Subís Mis Comprobantes Emitidos de tus monotributistas y ves quién pasa a otra categoría, quién está cerca del tope y quién puede bajar, con la cuota nueva y el mensaje listo para mandarle.</p>
+  </header>
+
+  <section class="sheet" id="sheet" aria-label="Cartera de monotributistas">
+    <div class="sheet-head">
+      <strong id="who">Cartera de ejemplo</strong>
+      <span class="sub" id="period"></span>
+      <span class="tag" id="stamp">monotributistas inventados</span>
+      <p id="headline"></p>
+    </div>
+    <div class="key" id="groups" role="group" aria-label="Filtrar por resultado"></div>
+    <div class="cols" aria-hidden="true"><span>Monotributista</span><span id="ruler-title">Facturación contra los topes</span><span>Qué pasa</span><span>Al margen</span></div>
+    <ul class="rows" id="items"></ul>
+    <div class="sheet-foot">
+      <p>Tocá un monotributista para ver su año mes por mes y el mensaje para mandarle. <button type="button" class="link" id="show-all" hidden>Ver todos</button></p>
+      <button type="button" class="btn ghost" id="copy">Copiar para Excel</button>
+      <button type="button" class="btn" id="xlsx">Descargar Excel</button>
+    </div>
+  </section>
+
+  <section class="try" aria-label="Probar con tus archivos">
+    <h2>Probalo con tus monotributistas</h2>
+    <p>Un archivo de Mis Comprobantes Emitidos por cliente, de los últimos 12 meses o más. Podés subir varios juntos: cada archivo es un monotributista. Después le elegís su categoría actual.</p>
+    <label class="drop" for="f-comp" id="drop-comp">
+      <input type="file" id="f-comp" accept=".csv,.txt,.xlsx,.xls" multiple>
+      <strong>Mis Comprobantes Emitidos</strong>
+      <span>Excel o CSV, como lo bajás de ARCA. Arrastralos acá o tocá para elegirlos.</span>
+    </label>
+    <p class="msg" id="msg" role="status"></p>
+    <p class="safe" id="samples">¿No tenés los archivos a mano? Bajá los de ejemplo de <button type="button" class="link" data-file="ferrero">Lucía Ferrero</button> y <button type="button" class="link" data-file="sosa">Martín Sosa</button>, y subilos. <button type="button" class="link" id="reset" hidden>Volver al ejemplo</button></p>
+    <p class="safe"><b>Tus archivos no salen de tu computadora.</b> Se leen en el navegador y no se suben a ningún lado.</p>
+  </section>
+
+  <section class="below">
+    <h2>Qué mira y qué tenés que mirar vos</h2>
+    <div class="scope">
+      <div>
+        <h3>Lo calcula solo</h3>
+        <ul>
+          <li>Lo facturado en el período de la próxima recategorización, restando las notas de crédito.</li>
+          <li>Lo que falta hasta el cierre, estimado con el promedio de los últimos 3 meses.</li>
+          <li>Los últimos 12 meses contra el tope de la K, que es lo que define si queda afuera del régimen.</li>
+          <li>La cuota nueva según sea de servicios o venta de bienes.</li>
+        </ul>
+      </div>
+      <div>
+        <h3>Lo revisás vos</h3>
+        <ul>
+          <li>Superficie del local, energía consumida y alquileres, que también definen la categoría.</li>
+          <li>Ingresos que no pasan por factura electrónica.</li>
+          <li>Si el cliente tiene otra actividad o cambió de actividad en el año.</li>
+        </ul>
+        <small>Topes y cuotas vigentes desde agosto de 2026 (ARCA). Se actualizan en febrero y agosto por inflación.</small>
+      </div>
+    </div>
+  </section>
+
+  <section class="offer">
+    <h2>Empezamos con una charla de 30 minutos</h2>
+    <p>Me mostrás cómo revisan hoy la recategorización y en 48 horas te mando qué haría, en cuánto tiempo y cuánto sale. Sin cargo. Puede correr sola todos los meses y avisarte cuando alguien se acerca al tope.</p>
+    <p class="price">Desde USD 50 por mes, con armado y mantenimiento incluidos.</p>
+    <p>Los datos de tus clientes quedan en la cuenta del estudio. Nunca pedimos claves fiscales.</p>
+  </section>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+(() => {
+  // ---------- Categories (ARCA, from 1 Aug 2026): annual gross income cap and monthly payment ----------
+  const LETTERS = "ABCDEFGHIJK".split("");
+  const CAP = [12009410.45, 17595182.74, 24670494.31, 30628651.43, 36028231.33, 45151659.41, 53995798.87, 81924660.37, 91699761.90, 105012519.20, 126610838.75];
+  const CUOTA = {
+    servicios: [49527.18, 56379.08, 66020.12, 84612.93, 119811.45, 150784.21, 230312.94, 522706.68, 963747.86, 1167299.76, 1614446.04],
+    bienes: [49527.18, 56379.08, 64530.58, 82564.81, 108267.51, 129930.65, 158815.05, 317895.01, 474992.78, 580793.69, 702103.24],
+  };
+  const K = CAP.length - 1;
+  const NEAR = 0.9; // warn when the estimate reaches 90% of the current cap
+
+  // ---------- Formatting ----------
+  const money0 = new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 0 });
+  const fmt = (n) => money0.format(n);
+  const fmtM = (n) => `$ ${(n / 1e6).toLocaleString("es-AR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} M`;
+  const pct = (x) => `${Math.round(x * 100)}%`;
+  const esc = (s) => String(s).replace(/[&<>"]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch]));
+  const MONTHS = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
+  const ym = (d) => d.getFullYear() * 12 + d.getMonth();
+  const ymName = (k) => `${MONTHS[k % 12]} ${Math.floor(k / 12)}`;
+  const ymShort = (k) => MONTHS[k % 12].slice(0, 3);
+  const cap1 = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+
+  // ---------- Parsing (same reader as the reconciliation demo) ----------
+  const DAY = 86400000;
+  const norm = (s) => String(s ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
+  function parseDelimited(text) {
+    const first = text.split(/\r?\n/).find((l) => l.trim()) || "";
+    const count = (ch) => first.split(ch).length - 1;
+    const delim = [";", "\t", ","].sort((a, b) => count(b) - count(a))[0];
+    const rows = []; let row = []; let cell = ""; let q = false;
+    for (let i = 0; i < text.length; i++) {
+      const c = text[i];
+      if (q) {
+        if (c === '"' && text[i + 1] === '"') { cell += '"'; i++; }
+        else if (c === '"') q = false;
+        else cell += c;
+      } else if (c === '"') q = true;
+      else if (c === delim) { row.push(cell); cell = ""; }
+      else if (c === "\n" || c === "\r") {
+        if (c === "\r" && text[i + 1] === "\n") i++;
+        row.push(cell); rows.push(row); row = []; cell = "";
+      } else cell += c;
+    }
+    if (cell !== "" || row.length) { row.push(cell); rows.push(row); }
+    return rows.filter((r) => r.some((x) => String(x).trim() !== ""));
+  }
+  function parseAmount(v) {
+    if (typeof v === "number") return v;
+    let s = String(v ?? "").replace(/[$\s ]/g, "");
+    if (!s) return 0;
+    let neg = false;
+    if (/^\(.*\)$/.test(s)) { neg = true; s = s.slice(1, -1); }
+    if (s.endsWith("-")) { neg = true; s = s.slice(0, -1); }
+    const lc = s.lastIndexOf(","), ld = s.lastIndexOf(".");
+    if (lc > -1 && ld > -1) s = lc > ld ? s.replace(/\./g, "").replace(",", ".") : s.replace(/,/g, "");
+    else if (lc > -1) s = s.replace(/\./g, "").replace(",", ".");
+    else if (/^-?\d{1,3}(\.\d{3})+$/.test(s)) s = s.replace(/\./g, "");
+    const n = parseFloat(s);
+    return isNaN(n) ? NaN : (neg ? -n : n);
+  }
+  function parseDate(v) {
+    if (v instanceof Date && !isNaN(v)) return new Date(v.getFullYear(), v.getMonth(), v.getDate());
+    if (typeof v === "number" && v > 20000 && v < 80000) {
+      const d = new Date(Math.round((v - 25569) * DAY));
+      return new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+    }
+    const s = String(v ?? "").trim();
+    let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+    if (m) return new Date(+m[1], +m[2] - 1, +m[3]);
+    m = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/);
+    if (m) { let y = +m[3]; if (y < 100) y += 2000; return new Date(y, +m[2] - 1, +m[1]); }
+    return null;
+  }
+  function findHeader(rows) {
+    for (let i = 0; i < Math.min(rows.length, 15); i++) {
+      if (rows[i].some((c) => norm(c).startsWith("fecha"))) return i;
+    }
+    return -1;
+  }
+  const col = (heads, test) => heads.findIndex(test);
+  const NC_CODES = new Set([3, 8, 13, 53, 203, 208, 213]);
+
+  function readComprobantes(rows) {
+    const h = findHeader(rows);
+    if (h < 0) throw new Error("No encontré la fila de títulos (una columna que empiece con “Fecha”). ¿Es el archivo de Mis Comprobantes?");
+    const heads = rows[h].map(norm);
+    // ARCA's Excel opens with a title row ("Mis Comprobantes Emitidos - CUIT ..."); use it when the columns don't say.
+    const title = rows.slice(0, h).flat().map(norm).join(" ");
+    const kind = heads.some((x) => x.includes("receptor")) ? "ventas" : heads.some((x) => x.includes("emisor")) ? "compras"
+      : /recibidos/.test(title) ? "compras" : /emitidos/.test(title) ? "ventas" : null;
+    const c = {
+      fecha: col(heads, (x) => x.startsWith("fecha")),
+      tipo: col(heads, (x) => x.includes("tipo") && x.includes("comprobante")),
+      tc: col(heads, (x) => x.includes("tipo cambio") || x.includes("tipo de cambio")),
+      mon: col(heads, (x) => x === "moneda"),
+      total: col(heads, (x) => x === "imp. total" || x === "importe total" || x === "total"),
+    };
+    if (c.total < 0) heads.forEach((x, i) => { if (x.includes("total") && !x.includes("tributo") && !x.includes("iva")) c.total = i; });
+    const missing = [["fecha", c.fecha], ["importe total", c.total]].filter(([, i]) => i < 0).map(([n]) => n);
+    if (missing.length) throw new Error(`No encontré la columna de ${missing.join(" ni de ")}. Columnas leídas: ${rows[h].join(", ")}.`);
+    const out = [];
+    rows.slice(h + 1).forEach((r) => {
+      const fecha = parseDate(r[c.fecha]);
+      let total = parseAmount(r[c.total]);
+      if (!fecha || !total || isNaN(total)) return;
+      const tipoRaw = c.tipo >= 0 ? String(r[c.tipo]) : "";
+      const code = parseInt(tipoRaw, 10);
+      const isNC = NC_CODES.has(code) || norm(tipoRaw).includes("nota de credito");
+      const tc = c.tc >= 0 ? parseAmount(r[c.tc]) : 1;
+      const mon = c.mon >= 0 ? norm(r[c.mon]) : "pes";
+      if (mon && mon !== "pes" && tc > 0) total = Math.round(total * tc * 100) / 100;
+      out.push({ fecha, total: Math.abs(total) * (isNC ? -1 : 1) });
+    });
+    if (!out.length) throw new Error("Leí el archivo pero no encontré comprobantes con fecha e importe.");
+    const cuit = (title.match(/\b(\d{2})-?(\d{8})-?(\d)\b/) || []).slice(1).join("");
+    return { kind, comps: out, cuit };
+  }
+  async function fileRows(file) {
+    const buf = await file.arrayBuffer();
+    if (/\.(csv|txt)$/i.test(file.name)) {
+      let text;
+      try { text = new TextDecoder("utf-8", { fatal: true }).decode(buf); }
+      catch { text = new TextDecoder("windows-1252").decode(buf); }
+      return parseDelimited(text.replace(/^﻿/, ""));
+    }
+    if (typeof XLSX === "undefined") throw new Error("No se pudo cargar el lector de Excel. Guardá el archivo como CSV y subilo de nuevo.");
+    const wb = XLSX.read(buf, { type: "array", cellDates: true });
+    return XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: true, defval: "" });
+  }
+
+  // ---------- Sample portfolio (invented), written as Mis Comprobantes Emitidos ----------
+  const HEAD_EMIT = "Fecha de Emisión;Tipo de Comprobante;Punto de Venta;Número Desde;Número Hasta;Cód. Autorización;Tipo Doc. Receptor;Nro. Doc. Receptor;Denominación Receptor;Tipo Cambio;Moneda;Imp. Neto Gravado;Imp. Neto No Gravado;Imp. Op. Exentas;Otros Tributos;IVA;Imp. Total";
+  const SAMPLE_REF = 2026 * 12 + 9; // data up to October 2026
+  // [id, name, contact, activity, current category, monthly billing at start and end of the 12 months]
+  const SAMPLES = [
+    ["ferrero", "Lucía Ferrero", "Lucía", "Kinesióloga", "servicios", 2, 1.75e6, 2.45e6],
+    ["sosa", "Martín Sosa", "Martín", "Diseñador gráfico", "servicios", 1, 1.38e6, 1.38e6],
+    ["rosa", "Almacén Doña Rosa", "Rosa", "Almacén de barrio", "bienes", 7, 4.2e6, 4.2e6],
+    ["ortiz", "Gabriel Ortiz", "Gabriel", "Electricista", "servicios", 0, 0.7e6, 0.7e6],
+    ["ruiz", "Valentina Ruiz", "Valentina", "Psicóloga", "servicios", 3, 2.2e6, 2.2e6],
+    ["tornillo", "Ferretería El Tornillo", "Hugo", "Ferretería", "bienes", 10, 10.6e6, 11.2e6],
+    ["benitez", "Camila Benítez", "Camila", "Profesora de inglés", "servicios", 1, 0.93e6, 0.93e6],
+    ["lagos", "Sergio Lagos", "Sergio", "Fletes y mudanzas", "servicios", 4, 2.78e6, 2.78e6],
+  ];
+  function rng(seed) { return () => { seed |= 0; seed = (seed + 0x6D2B79F5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+  const dec = (n) => n.toFixed(2).replace(".", ",");
+  function sampleCsv(s, si) {
+    const [, , , , act, , from, to] = s;
+    const r = rng(si * 7919 + 17);
+    const lines = [HEAD_EMIT];
+    let nro = 120 + Math.floor(r() * 400);
+    for (let k = 0; k < 12; k++) {
+      const m = SAMPLE_REF - 11 + k, y = Math.floor(m / 12), mo = m % 12;
+      const month = (from + (to - from) * k / 11) * (0.94 + r() * 0.12);
+      const n = act === "bienes" ? 14 + Math.floor(r() * 6) : 4 + Math.floor(r() * 5);
+      const w = Array.from({ length: n }, () => 0.4 + r());
+      const sw = w.reduce((a, b) => a + b, 0);
+      // One credit note in the year, so the reader has to subtract it.
+      const nc = k === 5 ? Math.round(month * 0.06 / 100) * 100 : 0;
+      w.forEach((x, i) => {
+        let amt = Math.round(month * x / sw / 10) * 10 + (i === 0 ? nc : 0);
+        const day = 1 + Math.floor(r() * 27);
+        const f = `${String(day).padStart(2, "0")}/${String(mo + 1).padStart(2, "0")}/${y}`;
+        nro++;
+        lines.push([f, 11, 2, nro, nro, "7642" + String(nro).padStart(10, "0"), 99, 0, "CONSUMIDOR FINAL", "1,00", "PES", dec(amt), "0,00", "0,00", "0,00", "0,00", dec(amt)].join(";"));
+      });
+      if (nc) {
+        nro++;
+        lines.push([`28/${String(mo + 1).padStart(2, "0")}/${y}`, 13, 2, nro, nro, "7642" + String(nro).padStart(10, "0"), 99, 0, "CONSUMIDOR FINAL", "1,00", "PES", dec(nc), "0,00", "0,00", "0,00", "0,00", dec(nc)].join(";"));
+      }
+    }
+    return lines.join("\n");
+  }
+  function sampleClient(s, si) {
+    const [id, name, contact, trade, act, cat] = s;
+    return { id, name, contact, trade, act, cat, sample: true, comps: readComprobantes(parseDelimited(sampleCsv(s, si))).comps };
+  }
+
+  // ---------- The analysis ----------
+  // Recategorization happens in January (looks at Jan–Dec) and July (Jul–Jun).
+  function nextRecat(ref) {
+    const y = Math.floor(ref / 12), mo = ref % 12;
+    return mo <= 5 ? { month: y * 12 + 6, from: (y - 1) * 12 + 6, to: y * 12 + 5 } : { month: (y + 1) * 12, from: y * 12, to: y * 12 + 11 };
+  }
+  function analyze(cl, ref) {
+    const byMonth = new Map();
+    cl.comps.forEach((c) => { const k = ym(c.fecha); if (k <= ref) byMonth.set(k, (byMonth.get(k) || 0) + c.total); });
+    const at = (k) => byMonth.get(k) || 0;
+    const sum = (a, b) => { let s = 0; for (let k = a; k <= b; k++) s += at(k); return s; };
+    const rc = nextRecat(ref);
+    const last12 = sum(ref - 11, ref);
+    const known = sum(rc.from, Math.min(ref, rc.to));
+    const left = Math.max(0, rc.to - ref);
+    const avg3 = sum(ref - 2, ref) / 3;
+    const est = left * Math.max(0, avg3);
+    const total = known + est;
+    const fit = CAP.findIndex((c) => total <= c);
+    const cur = cl.cat;
+    let st;
+    if (last12 > CAP[K]) st = "excl";
+    else if (fit < 0) st = "excl";
+    else if (cur == null) st = "sin";
+    else if (fit > cur) st = "sube";
+    else if (total >= CAP[cur] * NEAR) st = "cerca";
+    else if (fit < cur) st = "baja";
+    else st = "bien";
+    const months = []; for (let k = rc.from; k <= rc.to; k++) months.push({ k, v: k <= ref ? at(k) : Math.max(0, avg3), est: k > ref });
+    const cuotaNow = cur == null ? null : CUOTA[cl.act][cur];
+    const cuotaNew = fit < 0 ? null : CUOTA[cl.act][fit];
+    return { rc, last12, known, left, avg3, est, total, fit, cur, st, months, cuotaNow, cuotaNew, already: last12 > CAP[K] };
+  }
+
+  const ORDER = ["excl", "sube", "cerca", "baja", "sin", "bien"];
+  const GROUPS = {
+    excl: { t: "Quedan afuera", d: "Superan el tope de la K" },
+    sube: { t: "Suben", d: "Pasan a otra categoría" },
+    cerca: { t: "Cerca del tope", d: "Al 90% o más" },
+    baja: { t: "Pueden bajar", d: "Pagan menos cuota" },
+    sin: { t: "Sin categoría", d: "Elegí la actual" },
+    bien: { t: "Sin cambios", d: "Siguen igual" },
+  };
+
+  function verdict(a, cl) {
+    const L = (i) => LETTERS[i];
+    switch (a.st) {
+      case "excl": return a.already
+        ? { b: "Supera el tope de la K en los últimos 12 meses", s: `${fmtM(a.last12)} contra ${fmtM(CAP[K])}: queda excluido del monotributo`, note: "¡excluido!" }
+        : { b: "A este ritmo supera el tope de la K", s: `Estimado ${fmtM(a.total)} contra ${fmtM(CAP[K])}: puede quedar excluido`, note: "¡ojo, K!" };
+      case "sube": return { b: `Pasa de la ${L(a.cur)} a la ${L(a.fit)}`, s: `Cuota de ${fmt(a.cuotaNow)} a ${fmt(a.cuotaNew)} por mes (+${fmt(a.cuotaNew - a.cuotaNow)})`, note: `pasa a ${L(a.fit)}` };
+      case "cerca": return { b: `Al ${pct(a.total / CAP[a.cur])} del tope de la ${L(a.cur)}`, s: `Le quedan ${fmtM(CAP[a.cur] - a.total)} de margen hasta el cierre`, note: pct(a.total / CAP[a.cur]) };
+      case "baja": return { b: `Puede bajar de la ${L(a.cur)} a la ${L(a.fit)}`, s: `Cuota de ${fmt(a.cuotaNow)} a ${fmt(a.cuotaNew)} por mes (−${fmt(a.cuotaNow - a.cuotaNew)})`, note: `baja a ${L(a.fit)}` };
+      case "sin": return { b: `Le corresponde la ${L(a.fit)}`, s: "Elegí su categoría actual para ver si cambia", note: `¿${L(a.fit)}?` };
+      default: return { b: `Sigue en la ${L(a.cur)}`, s: `Usa el ${pct(a.total / CAP[a.cur])} del tope`, note: "" };
+    }
+  }
+
+  function message(a, cl) {
+    const L = (i) => LETTERS[i];
+    const hi = `Hola ${cl.contact || cl.name}, ¿cómo estás? Revisamos tu facturación para la recategorización de ${ymName(a.rc.month)}.`;
+    const span = `De ${MONTHS[a.rc.from % 12]} a ${MONTHS[Math.min(a.rc.to, ref()) % 12]} facturaste ${fmt(a.known)}`;
+    const proj = a.left ? `${span} y, si seguís al ritmo de los últimos meses, cerrás el período en unos ${fmt(a.total)}.` : `${span}.`;
+    switch (a.st) {
+      case "excl": return a.already
+        ? `${hi}\n\nEn los últimos 12 meses facturaste ${fmt(a.last12)}, por encima del tope de la categoría más alta del monotributo (${fmt(CAP[K])}). Eso implica la exclusión del régimen y el pase al régimen general. Necesitamos hablarlo esta semana para ver cómo seguimos.`
+        : `${hi}\n\n${proj} Eso supera el tope de la categoría más alta del monotributo (${fmt(CAP[K])}), y quedarías afuera del régimen. Conviene que lo hablemos antes de fin de mes.`;
+      case "sube": return `${hi}\n\n${proj} Eso pasa el tope de tu categoría actual, la ${L(a.cur)} (${fmt(CAP[a.cur])}), así que te corresponde la ${L(a.fit)}. La cuota mensual pasa de ${fmt(a.cuotaNow)} a ${fmt(a.cuotaNew)} con los valores de hoy. Si querés lo vemos antes de la recategorización.`;
+      case "cerca": return `${hi}\n\n${proj} Estás al ${pct(a.total / CAP[a.cur])} del tope de tu categoría, la ${L(a.cur)} (${fmt(CAP[a.cur])}). Si facturás más de ${fmt(CAP[a.cur] - a.total)} adicionales hasta el cierre, pasás a la ${L(Math.min(a.cur + 1, K))}. Avisanos si esperás algún ingreso grande.`;
+      case "baja": return `${hi}\n\n${proj} Con eso podés bajar de la ${L(a.cur)} a la ${L(a.fit)}, y la cuota mensual pasa de ${fmt(a.cuotaNow)} a ${fmt(a.cuotaNew)}. Si estás de acuerdo, lo hacemos en la recategorización.`;
+      default: return "";
+    }
+  }
+
+  // ---------- State and rendering ----------
+  const state = { clients: [], filter: "all", open: null, sample: true };
+  const $ = (id) => document.getElementById(id);
+  // Uploaded files are read up to the last full month before today (or the last month with invoices, if earlier).
+  function ref() {
+    if (state.sample) return SAMPLE_REF;
+    const now = new Date(), lastFull = ym(now) - 1;
+    const lastData = Math.max(...state.clients.flatMap((c) => c.comps.map((x) => ym(x.fecha))));
+    return Math.min(lastFull, lastData);
+  }
+  function setMsg(text, kind = "") { const el = $("msg"); el.textContent = text; el.className = "msg" + (kind ? " " + kind : ""); }
+
+  function ruler(a) {
+    const base = Math.max(a.cur ?? 0, a.fit < 0 ? K : a.fit);
+    const value = a.already ? a.last12 : a.total;
+    const max = Math.max(value, CAP[Math.min(base + 1, K)]) * 1.08;
+    const x = (v) => Math.max(0, Math.min(100, v / max * 100));
+    const ticks = [];
+    let lastShown = -100;
+    CAP.forEach((c, i) => {
+      if (c > max) return;
+      const p = x(c), cur = i === a.cur;
+      const over = a.st === "sube" && i === a.cur || a.st === "excl" && i === K;
+      const show = cur || p - lastShown > 7 && (a.cur == null || Math.abs(p - x(CAP[a.cur])) > 7);
+      if (show) lastShown = p;
+      ticks.push(`<span class="tick${cur ? " cur" : ""}${over ? " over" : ""}" style="left:${p}%">${show ? `<span>${LETTERS[i]}</span>` : ""}</span>`);
+    });
+    const known = a.already ? a.last12 : a.known;
+    const est = a.already ? 0 : a.est;
+    return `<div class="ruler" aria-hidden="true"><div class="track"></div><div class="known" style="width:${x(known)}%"></div>${est > 0 ? `<div class="proj" style="left:${x(known)}%;width:${x(known + est) - x(known)}%"></div>` : ""}${ticks.join("")}</div>`;
+  }
+
+  function chart(a) {
+    const W = 560, H = 190, padL = 8, padB = 22, padT = 18;
+    const capM = a.cur != null ? CAP[a.cur] / 12 : null;
+    const top = Math.max(...a.months.map((m) => m.v), capM || 0) * 1.15 || 1;
+    const bw = (W - padL) / a.months.length;
+    const y = (v) => padT + (H - padT - padB) * (1 - v / top);
+    const bars = a.months.map((m, i) => {
+      const x0 = padL + i * bw + 3, w = bw - 6, y0 = y(Math.max(0, m.v)), h = H - padB - y0;
+      const r = Math.min(4, h, w / 2);
+      const d = h > 0 ? `M${x0},${H - padB}V${y0 + r}Q${x0},${y0} ${x0 + r},${y0}H${x0 + w - r}Q${x0 + w},${y0} ${x0 + w},${y0 + r}V${H - padB}Z` : "";
+      const tip = `${cap1(ymName(m.k))}: ${fmt(m.v)}${m.est ? " (estimado)" : ""}`;
+      return `<g><title>${esc(tip)}</title><rect class="hit" x="${padL + i * bw}" y="${padT}" width="${bw}" height="${H - padT - padB}"></rect>${d ? `<path class="bar${m.est ? " est" : ""}" d="${d}"></path>` : ""}<text x="${x0 + w / 2}" y="${H - 6}" text-anchor="middle">${ymShort(m.k)}</text></g>`;
+    }).join("");
+    const capLine = capM ? `<line class="capline" x1="${padL}" x2="${W}" y1="${y(capM)}" y2="${y(capM)}"></line>` : "";
+    return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Facturación por mes del período de la recategorización">
+      <defs><pattern id="hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line class="hatch-line" x1="0" y1="0" x2="0" y2="6"></line></pattern></defs>
+      <line class="grid" x1="${padL}" x2="${W}" y1="${H - padB}" y2="${H - padB}"></line>${bars}${capLine}</svg>`;
+  }
+
+  function detail(cl, a) {
+    const L = (i) => LETTERS[i];
+    const msg = message(a, cl);
+    const picks = cl.sample ? "" : `<div class="pick">
+        <label for="sel-cat">Categoría actual<select id="sel-cat"><option value="">Elegir…</option>${LETTERS.map((l, i) => `<option value="${i}"${i === cl.cat ? " selected" : ""}>${l}</option>`).join("")}</select></label>
+        <label for="sel-act">Actividad<select id="sel-act"><option value="servicios"${cl.act === "servicios" ? " selected" : ""}>Servicios</option><option value="bienes"${cl.act === "bienes" ? " selected" : ""}>Venta de bienes</option></select></label>
+        <label for="sel-name">Nombre<input id="sel-name" value="${esc(cl.name)}" style="padding:6px 10px;border-radius:6px;border:1.5px solid var(--line);background:var(--paper);color:var(--ink);font:inherit"></label>
+      </div>`;
+    return `<div class="detail">
+      <div class="chart">
+        <h3>${esc(cap1(ymName(a.rc.from)))} a ${esc(ymName(a.rc.to))}</h3>
+        ${chart(a)}
+        <div class="legend"><span><i class="k"></i>Facturado</span>${a.left ? `<span><i class="e"></i>Estimado con el promedio de los últimos 3 meses</span>` : ""}${a.cur != null ? `<span><i class="c"></i>Tope de la ${LETTERS[a.cur]} por mes: ${fmtM(CAP[a.cur] / 12)}</span>` : ""}</div>
+        <dl class="ledger num">
+          <dt>Facturado hasta ${esc(ymName(Math.min(a.rc.to, ref())))}</dt><dd>${fmt(a.known)}</dd>
+          ${a.left ? `<dt>Estimado para ${a.left === 1 ? "el mes que falta" : `los ${a.left} meses que faltan`}</dt><dd>${fmt(a.est)}</dd>` : ""}
+          <dt class="tot">Para la recategorización</dt><dd class="tot">${fmt(a.total)}</dd>
+          <dt>Últimos 12 meses (para la exclusión)</dt><dd>${fmt(a.last12)}</dd>
+          ${a.cur != null ? `<dt>Tope de la ${L(a.cur)}</dt><dd>${fmt(CAP[a.cur])}</dd>` : ""}
+        </dl>
+      </div>
+      <div class="side">
+        ${picks}
+        <h3>Mensaje para ${esc(cl.contact || cl.name)}</h3>
+        ${msg ? `<textarea id="msg-text" aria-label="Mensaje para el cliente">${esc(msg)}</textarea>
+        <div class="acts"><button type="button" class="btn" id="msg-copy">Copiar mensaje</button><a class="btn ghost" id="wa" href="https://wa.me/?text=${encodeURIComponent(msg)}" target="_blank" rel="noopener">Abrir en WhatsApp</a></div>`
+        : `<p class="quiet">${a.st === "sin" ? "Elegí su categoría actual para armar el mensaje." : "Sigue en su categoría: no hace falta avisarle."}</p>`}
+      </div>
+    </div>`;
+  }
+
+  function render() {
+    const R = ref();
+    const rows = state.clients.map((cl, i) => ({ cl, i, a: analyze(cl, R) }));
+    rows.sort((p, q) => ORDER.indexOf(p.a.st) - ORDER.indexOf(q.a.st) || q.a.total - p.a.total);
+    state.view = rows;
+    const rc = nextRecat(R);
+    $("who").textContent = state.sample ? "Cartera de ejemplo" : "Tus monotributistas";
+    $("stamp").textContent = state.sample ? "monotributistas inventados" : "tus archivos";
+    $("stamp").className = "tag" + (state.sample ? "" : " mine");
+    $("period").textContent = `${rows.length} monotributistas · facturas hasta ${ymName(R)} · próxima recategorización: ${ymName(rc.month)}, con lo facturado de ${ymName(rc.from)} a ${ymName(rc.to)}`;
+    $("ruler-title").textContent = `Facturación ${MONTHS[rc.from % 12].slice(0, 3)}–${MONTHS[rc.to % 12].slice(0, 3)} contra los topes`;
+    const n = (st) => rows.filter((r) => r.a.st === st).length;
+    const flagged = n("excl") + n("sube") + n("cerca");
+    $("headline").innerHTML = !rows.length ? "Subí los archivos abajo para ver tu cartera."
+      : `De <b>${rows.length}</b> monotributistas, <b>${n("excl") + n("sube")}</b> ${n("excl") + n("sube") === 1 ? "cambia" : "cambian"} de categoría o ${n("excl") + n("sube") === 1 ? "queda" : "quedan"} afuera, <b>${n("cerca")}</b> ${n("cerca") === 1 ? "está" : "están"} cerca del tope y <b>${n("baja")}</b> ${n("baja") === 1 ? "puede" : "pueden"} bajar de categoría.${n("sin") ? ` Elegí la categoría actual de ${n("sin") === 1 ? "uno" : n("sin")} para ver si ${n("sin") === 1 ? "cambia" : "cambian"}.` : flagged ? "" : " Nadie se pasa."}`;
+    $("groups").innerHTML = ORDER.filter((st) => n(st) || st !== "sin").map((st) => `<button type="button" class="s-${st}" data-g="${st}" aria-pressed="${state.filter === st}"><span class="dot"></span><b><span class="num">${n(st)}</span> ${GROUPS[st].t}</b><small>${GROUPS[st].d}</small></button>`).join("");
+    $("show-all").hidden = state.filter === "all";
+    const shown = state.filter === "all" ? rows : rows.filter((r) => r.a.st === state.filter);
+    $("items").innerHTML = shown.length ? shown.map(({ cl, i, a }) => {
+      const v = verdict(a, cl), open = state.open === cl.id;
+      return `<li class="${open ? "open" : ""}">
+        <button type="button" class="row s-${a.st}" data-i="${i}" aria-expanded="${open}">
+          <span class="name"><b>${esc(cl.name)}</b><small>${esc(cl.trade || (cl.act === "bienes" ? "Venta de bienes" : "Servicios"))} · ${a.cur != null ? `<span class="chip">${LETTERS[a.cur]}</span>` : "sin categoría"}</small></span>
+          ${ruler(a)}
+          <span class="what"><b>${v.b}</b><small>${v.s}</small></span>
+          <span class="note">${esc(v.note)}</span>
+        </button>
+        ${open ? detail(cl, a) : ""}
+      </li>`;
+    }).join("") : `<li class="empty">${rows.length ? "No hay nadie en este grupo." : "Cuando subas los archivos, acá aparece cada monotributista."}</li>`;
+  }
+
+  // ---------- Exports ----------
+  function exportRows() {
+    const R = ref();
+    const head = ["Monotributista", "CUIT", "Actividad", "Categoría actual", "Facturado en el período", "Estimado hasta el cierre", "Total para la recategorización", "Últimos 12 meses", "Categoría que corresponde", "Tope categoría actual", "% del tope", "Cuota actual", "Cuota nueva", "Diferencia por mes", "Qué pasa"];
+    const lines = [head];
+    state.view.forEach(({ cl, a }) => {
+      const v = verdict(a, cl);
+      lines.push([cl.name, cl.cuit || "", cl.act === "bienes" ? "Venta de bienes" : "Servicios", a.cur != null ? LETTERS[a.cur] : "", a.known, a.est, a.total, a.last12, a.fit >= 0 ? LETTERS[a.fit] : "Excluido",
+        a.cur != null ? CAP[a.cur] : "", a.cur != null ? a.total / CAP[a.cur] : "", a.cuotaNow ?? "", a.cuotaNew ?? "", a.cuotaNow != null && a.cuotaNew != null ? a.cuotaNew - a.cuotaNow : "", `${v.b}. ${v.s}.`]);
+    });
+    return { lines, R };
+  }
+  function tsv() {
+    const n = (x) => typeof x === "number" ? (Math.abs(x) < 2 && x % 1 ? x.toFixed(3) : x.toFixed(2)).replace(".", ",") : x;
+    return exportRows().lines.map((l) => l.map(n).join("\t")).join("\n");
+  }
+  async function saveFile(filename, data) {
+    const dl = window.claude && typeof window.claude.use === "function" ? await window.claude.use("downloads").catch(() => null) : null;
+    if (dl) {
+      try { await dl.save({ filename, data }); return; }
+      catch (err) {
+        if (err && err.code === "declined") return;
+        if (err && !["unavailable", "not_granted", "capability_disabled", "capability_removed"].includes(err.code)) { setMsg("No se pudo guardar el archivo: " + (err.message || err.code), "err"); return; }
+      }
+    }
+    const url = URL.createObjectURL(data instanceof Blob ? data : new Blob([data]));
+    const link = Object.assign(document.createElement("a"), { href: url, download: filename });
+    document.body.appendChild(link); link.click(); link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+  }
+
+  // ---------- Events ----------
+  $("groups").addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-g]");
+    if (!b) return;
+    state.filter = state.filter === b.dataset.g ? "all" : b.dataset.g; render();
+  });
+  $("show-all").addEventListener("click", () => { state.filter = "all"; render(); });
+  $("items").addEventListener("click", (e) => {
+    const b = e.target.closest("button.row");
+    if (b) {
+      const cl = state.clients[+b.dataset.i];
+      state.open = state.open === cl.id ? null : cl.id; render();
+      const again = $("items").querySelector(`button.row[data-i="${b.dataset.i}"]`);
+      if (again) again.focus({ preventScroll: true });
+      return;
+    }
+    if (e.target.id === "msg-copy") {
+      const t = e.target;
+      const done = () => { t.textContent = "Copiado"; setTimeout(() => (t.textContent = "Copiar mensaje"), 2000); };
+      const fallback = () => { $("msg-text").select(); t.textContent = "Seleccionado: copialo con Ctrl+C"; };
+      if (navigator.clipboard) navigator.clipboard.writeText($("msg-text").value).then(done, fallback); else fallback();
+    }
+  });
+  $("items").addEventListener("input", (e) => {
+    if (e.target.id === "msg-text") $("wa").href = "https://wa.me/?text=" + encodeURIComponent(e.target.value);
+  });
+  $("items").addEventListener("change", (e) => {
+    const cl = state.clients.find((c) => c.id === state.open);
+    if (!cl) return;
+    if (e.target.id === "sel-cat") cl.cat = e.target.value === "" ? null : +e.target.value;
+    else if (e.target.id === "sel-act") cl.act = e.target.value;
+    else if (e.target.id === "sel-name") cl.name = cl.contact = e.target.value.trim() || cl.name;
+    else return;
+    render();
+  });
+  $("copy").addEventListener("click", (e) => {
+    const b = e.currentTarget;
+    if (!navigator.clipboard) { setMsg("Tu navegador no dejó copiar. Usá «Descargar Excel».", "err"); return; }
+    navigator.clipboard.writeText(tsv()).then(() => { b.textContent = "Copiado. Pegalo en Excel"; setTimeout(() => (b.textContent = "Copiar para Excel"), 2500); }, () => setMsg("Tu navegador no dejó copiar. Usá «Descargar Excel».", "err"));
+  });
+  $("xlsx").addEventListener("click", () => {
+    if (typeof XLSX === "undefined") { setMsg("No se pudo cargar el armador de Excel. Usá «Copiar para Excel».", "err"); return; }
+    const { lines, R } = exportRows();
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(lines), "Recategorización");
+    const rc = nextRecat(R), ks = []; for (let k = rc.from; k <= rc.to; k++) ks.push(k);
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["Monotributista", ...ks.map((k) => cap1(ymName(k)) + (k > R ? " (estimado)" : ""))],
+      ...state.view.map(({ cl, a }) => [cl.name, ...a.months.map((m) => Math.round(m.v * 100) / 100)])]), "Mes por mes");
+    saveFile(`Recategorización ${ymName(rc.month)}.xlsx`, new Blob([XLSX.write(wb, { bookType: "xlsx", type: "array" })]));
+  });
+
+  function nameFrom(file, i) {
+    const base = file.name.replace(/\.[^.]+$/, "");
+    const parts = base.split(/\s+-\s+/);
+    const n = parts.length > 1 ? parts[parts.length - 1] : base.replace(/mis\s*comprobantes|emitidos/gi, "").replace(/[_-]+/g, " ").trim();
+    return n || `Cliente ${i + 1}`;
+  }
+  async function ingest(files) {
+    const added = [], skipped = [];
+    for (const file of files) {
+      try {
+        const { kind, comps, cuit } = readComprobantes(await fileRows(file));
+        if (kind === "compras") { skipped.push(`“${file.name}” es de comprobantes recibidos; para la recategorización hacen falta los emitidos`); continue; }
+        if (state.sample) { state.clients = []; state.sample = false; state.filter = "all"; $("reset").hidden = false; }
+        const name = nameFrom(file, state.clients.length);
+        const id = "u" + Date.now().toString(36) + added.length;
+        state.clients.push({ id, name, contact: name, trade: "", act: "servicios", cat: null, sample: false, cuit, comps });
+        added.push(name);
+      } catch (err) { skipped.push(`“${file.name}”: ${err.message}`); }
+    }
+    if (added.length) state.open = state.clients[state.clients.length - added.length].id;
+    const parts = [];
+    if (added.length) parts.push(`Listo: leí ${added.length === 1 ? "a " + added[0] : added.length + " monotributistas"}. Tocá cada uno arriba y elegí su categoría actual.`);
+    if (skipped.length) parts.push(skipped.join(". ") + ".");
+    setMsg(parts.join(" "), added.length ? "okmsg" : "err");
+    render();
+  }
+  $("f-comp").addEventListener("change", (e) => { const fs = [...e.target.files]; e.target.value = ""; if (fs.length) ingest(fs); });
+  const z = $("drop-comp");
+  z.addEventListener("dragover", (e) => { e.preventDefault(); z.classList.add("over"); });
+  z.addEventListener("dragleave", () => z.classList.remove("over"));
+  z.addEventListener("drop", (e) => { e.preventDefault(); z.classList.remove("over"); const fs = [...e.dataTransfer.files]; if (fs.length) ingest(fs); });
+  $("samples").addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-file]");
+    if (!b) return;
+    const si = SAMPLES.findIndex((s) => s[0] === b.dataset.file);
+    saveFile(`Mis Comprobantes Emitidos - ${SAMPLES[si][1]}.csv`, "﻿" + sampleCsv(SAMPLES[si], si));
+  });
+  const SAMPLE_MSG = "Arriba ves una cartera de ejemplo con 8 monotributistas inventados. Tocá uno para ver su año y el mensaje, o bajá sus archivos y subilos para probar.";
+  function loadSample() {
+    state.clients = SAMPLES.map(sampleClient); state.sample = true; state.filter = "all"; state.open = "ferrero";
+    $("reset").hidden = true; setMsg(SAMPLE_MSG);
+  }
+  $("reset").addEventListener("click", () => { loadSample(); render(); });
+
+  window.__recat = { CAP, CUOTA, analyze, nextRecat, readComprobantes, parseDelimited, sampleCsv, SAMPLES, state };
+  loadSample();
+  render();
+})();
+</script>
